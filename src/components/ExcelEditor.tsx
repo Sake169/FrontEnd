@@ -1,9 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useMemo } from 'react'
 import { Button, App, Spin, Card } from 'antd'
 import { DownloadOutlined, SaveOutlined } from '@ant-design/icons'
+import { AgGridReact } from 'ag-grid-react'
+import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community'
+import 'ag-grid-community/styles/ag-grid.css'
+import 'ag-grid-community/styles/ag-theme-alpine.css'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import { saveExcelData } from '../services/api'
+import type { ColDef, GridReadyEvent, CellValueChangedEvent } from 'ag-grid-community'
+
+// 注册AG Grid模块
+ModuleRegistry.registerModules([AllCommunityModule])
 
 interface ExcelEditorProps {
   excelUrl?: string
@@ -60,26 +68,86 @@ const ExcelEditor: React.FC<ExcelEditorProps> = ({ excelUrl, fileName, onSave })
   }
 
   // 处理单元格编辑
-  const handleCellEdit = (rowIndex: number, colIndex: number, value: string) => {
-    const newData = [...excelData]
-    if (!newData[rowIndex]) {
-      newData[rowIndex] = []
-    }
-    newData[rowIndex][colIndex] = value
-    setExcelData(newData)
+  const onCellValueChanged = (event: CellValueChangedEvent) => {
+    // AG Grid会自动更新数据，这里可以添加额外的处理逻辑
+    console.log('Cell value changed:', event)
   }
+
+  // 转换数据为AG Grid格式
+  const { rowData, columnDefs } = useMemo(() => {
+    if (!excelData.length) {
+      return { rowData: [], columnDefs: [] }
+    }
+
+    // 使用第一行作为列标题，如果第一行是数据则生成默认列名
+    const headers = excelData[0] || []
+    const hasHeaders = headers.every(header => typeof header === 'string' && header.trim() !== '')
+    
+    const cols: ColDef[] = []
+    const maxCols = Math.max(...excelData.map(row => row?.length || 0))
+    
+    for (let i = 0; i < maxCols; i++) {
+      const headerName = hasHeaders && headers[i] ? String(headers[i]) : `列${i + 1}`
+      cols.push({
+        field: `col${i}`,
+        headerName,
+        editable: true,
+        sortable: true,
+        filter: true,
+        resizable: true,
+        minWidth: 100,
+        cellEditor: 'agTextCellEditor'
+      })
+    }
+
+    // 转换行数据
+    const startRow = hasHeaders ? 1 : 0
+    const rows = excelData.slice(startRow).map((row, index) => {
+      const rowObj: any = { id: index }
+      for (let i = 0; i < maxCols; i++) {
+        rowObj[`col${i}`] = row?.[i] || ''
+      }
+      return rowObj
+    })
+
+    return { rowData: rows, columnDefs: cols }
+  }, [excelData])
+
+  // 从AG Grid获取数据
+  const getGridData = () => {
+    const gridApi = gridRef.current?.api
+    if (!gridApi) return []
+
+    const allRows: any[] = []
+    gridApi.forEachNode(node => {
+      if (node.data) {
+        allRows.push(node.data)
+      }
+    })
+
+    // 转换回二维数组格式
+    const headers = columnDefs.map(col => col.headerName || '')
+    const dataRows = allRows.map(row => {
+      return columnDefs.map(col => row[col.field || ''] || '')
+    })
+
+    return [headers, ...dataRows]
+  }
+
+  const gridRef = useRef<AgGridReact>(null)
 
   // 保存Excel数据
   const handleSave = async () => {
     try {
       setLoading(true)
+      const currentData = getGridData()
       await saveExcelData({
         fileName: fileName || 'edited_excel.xlsx',
-        data: excelData,
+        data: currentData,
         sheets: workbook?.SheetNames
       })
       message.success('Excel数据保存成功')
-      onSave?.(excelData)
+      onSave?.(currentData)
     } catch (error) {
       console.error('保存失败:', error)
       message.error('保存失败')
@@ -91,9 +159,12 @@ const ExcelEditor: React.FC<ExcelEditorProps> = ({ excelUrl, fileName, onSave })
   // 下载Excel文件
   const handleDownload = () => {
     try {
+      // 获取当前表格数据
+      const currentData = getGridData()
+      
       // 创建新的工作簿
       const wb = XLSX.utils.book_new()
-      const ws = XLSX.utils.aoa_to_sheet(excelData)
+      const ws = XLSX.utils.aoa_to_sheet(currentData)
       XLSX.utils.book_append_sheet(wb, ws, currentSheet || 'Sheet1')
       
       // 生成Excel文件
@@ -119,48 +190,26 @@ const ExcelEditor: React.FC<ExcelEditorProps> = ({ excelUrl, fileName, onSave })
       )
     }
 
-    const maxCols = Math.max(...excelData.map(row => row?.length || 0))
-    
     return (
-      <div className="excel-table-container" style={{ overflow: 'auto', maxHeight: '500px' }}>
-        <table 
-          style={{ 
-            width: '100%', 
-            borderCollapse: 'collapse',
-            fontSize: '12px'
+      <div className="ag-theme-alpine" style={{ height: '500px', width: '100%' }}>
+        <AgGridReact
+          ref={gridRef}
+          rowData={rowData}
+          columnDefs={columnDefs}
+          defaultColDef={{
+            editable: true,
+            sortable: true,
+            filter: true,
+            resizable: true,
+            minWidth: 100
           }}
-        >
-          <tbody>
-            {excelData.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {Array.from({ length: maxCols }, (_, colIndex) => (
-                  <td
-                    key={colIndex}
-                    style={{
-                      border: '1px solid #d9d9d9',
-                      padding: '4px 8px',
-                      minWidth: '80px',
-                      maxWidth: '200px'
-                    }}
-                  >
-                    <input
-                      type="text"
-                      value={row?.[colIndex] || ''}
-                      onChange={(e) => handleCellEdit(rowIndex, colIndex, e.target.value)}
-                      style={{
-                        width: '100%',
-                        border: 'none',
-                        outline: 'none',
-                        background: 'transparent',
-                        fontSize: '12px'
-                      }}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          onCellValueChanged={onCellValueChanged}
+          suppressRowClickSelection={true}
+          rowSelection="multiple"
+          animateRows={true}
+          undoRedoCellEditing={true}
+          undoRedoCellEditingLimit={20}
+        />
       </div>
     )
   }
