@@ -3,6 +3,7 @@
 支持PDF、Excel、JPG等多种格式文档解析，将多模态内容转换为Markdown格式输出
 """
 
+from argparse import FileType
 import uuid
 import os
 import tempfile
@@ -10,6 +11,9 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
 from loguru import logger
 import json
+import pandas as pd
+import io
+import mimetypes
 
 # MinerU相关导入
 from mineru.cli.common import do_parse, read_fn, pdf_suffixes, image_suffixes, prepare_env
@@ -22,61 +26,67 @@ def safe_stem(file_path):
     return re.sub(r'[^\w.]', '_', stem)
 
 
-class DocumentParser:
-    """文档解析器，支持PDF、Excel、JPG等多种格式"""
+def detect_file_type(file_bytes: bytes, file_name: str = "") -> str:
+    """
+    检测文件类型
     
-    def __init__(self, dpi: int = 300, output_dir: str = "./output"):
-        """
-        初始化文档解析器
+    Args:
+        file_bytes: 文件二进制数据
+        file_name: 文件名（可选，用于辅助检测）
         
-        Args:
-            dpi: 图像分辨率，默认300
-            output_dir: 输出目录，默认"./output"
-        """
-        self.dpi = dpi
-        self.output_dir = output_dir
-        self.supported_formats = pdf_suffixes + image_suffixes + ['.xlsx', '.xls']
+    Returns:
+        文件类型字符串：'pdf', 'jpg', 'xlsx', 'unknown'
+    """
+    try:
+        # 首先尝试通过文件名检测
+        if file_name:
+            file_ext = Path(file_name).suffix.lower()
+            if file_ext in ['.pdf']:
+                return 'pdf'
+            elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.gif', '.webp']:
+                return 'jpg'
+            elif file_ext in ['.xlsx', '.xls']:
+                return 'xlsx'
         
-    def is_supported_format(self, file_path: Union[str, Path]) -> bool:
-        """检查文件格式是否支持"""
-        file_path = Path(file_path)
-        return file_path.suffix.lower() in self.supported_formats
-    
-    def process_excel_to_images(self, file_path: Union[str, Path]) -> List[bytes]:
-        """将Excel文件转换为图像字节数据"""
-        try:
-            # 这里可以实现Excel转图像的逻辑
-            # 目前暂时抛出提示，需要额外的Excel处理依赖
-            raise NotImplementedError("Excel处理功能需要额外的依赖库，请先实现Excel转图像功能")
-        except Exception as e:
-            logger.error(f"Excel文件处理失败: {str(e)}")
-            raise
-    
-    def load_file_bytes(self, file_path: Union[str, Path]) -> bytes:
-        """
-        加载文件字节数据
-        
-        Args:
-            file_path: 文件路径
+        # 通过文件头检测
+        if len(file_bytes) >= 4:
+            # PDF文件头检测
+            if file_bytes[:4] == b'%PDF':
+                return 'pdf'
             
-        Returns:
-            文件的字节数据
-        """
-        file_path = Path(file_path)
+            # Excel文件头检测
+            if file_bytes[:4] == b'PK\x03\x04':  # ZIP格式（Excel文件是ZIP格式）
+                # 进一步检查是否为Excel
+                try:
+                    import zipfile
+                    with io.BytesIO(file_bytes) as bio:
+                        with zipfile.ZipFile(bio) as zf:
+                            if any(name.startswith('xl/') for name in zf.namelist()):
+                                return 'excel'
+                except:
+                    pass
+            
+            # 图像文件头检测
+            image_signatures = {
+                b'\xff\xd8\xff': 'jpg',  # JPEG
+                b'\x89PNG\r\n\x1a\n': 'jpg',  # PNG
+                b'GIF87a': 'jpg',  # GIF
+                b'GIF89a': 'jpg',  # GIF
+                b'BM': 'jpg',  # BMP
+                b'II*\x00': 'jpg',  # TIFF (little endian)
+                b'MM\x00*': 'jpg',  # TIFF (big endian)
+            }
+            
+            for signature, file_type in image_signatures.items():
+                if file_bytes.startswith(signature):
+                    return file_type
         
-        if not file_path.exists():
-            raise FileNotFoundError(f"文件不存在: {file_path}")
+        logger.warning(f"无法检测文件类型，文件名: {file_name}")
+        return 'unknown'
         
-        if not self.is_supported_format(file_path):
-            raise ValueError(f"不支持的文件格式: {file_path.suffix}")
-        
-        # 对于Excel文件，需要特殊处理
-        if file_path.suffix.lower() in ['.xlsx', '.xls']:
-            # 目前暂不实现Excel处理，抛出提示
-            raise NotImplementedError("Excel处理功能待实现")
-        
-        # 使用MinerU的read_fn函数处理PDF和图像文件
-        return read_fn(file_path)
+    except Exception as e:
+        logger.error(f"文件类型检测失败: {str(e)}")
+        return 'unknown'
 
 
 class MineruProcessor:
@@ -135,6 +145,8 @@ class MineruProcessor:
             lang_list = [lang_list[0] if lang_list else "ch"] * len(file_names)
         
         try:
+            logger.info(f"开始使用MinerU处理 {len(file_names)} 个文件")
+            
             # 调用MinerU的do_parse函数
             do_parse(
                 output_dir=output_dir,
@@ -156,6 +168,8 @@ class MineruProcessor:
                 start_page_id=config["start_page_id"],
                 end_page_id=config["end_page_id"],
             )
+            
+            logger.info("MinerU处理完成，开始收集结果")
             
             # 收集结果
             return self._collect_results(output_dir, file_names, config)
@@ -184,8 +198,11 @@ class MineruProcessor:
                     if os.path.exists(md_file):
                         with open(md_file, "r", encoding="utf-8") as f:
                             results[file_name]["md_content"] = f.read()
+                        logger.info(f"成功读取Markdown文件: {md_file}")
+                    else:
+                        logger.warning(f"Markdown文件不存在: {md_file}")
                 
-                # 读取其他格式结果
+                # 读取其他格式结果（可选）
                 if config["return_middle_json"]:
                     json_file = os.path.join(parse_dir, f"{file_name}_middle.json")
                     if os.path.exists(json_file):
@@ -210,140 +227,211 @@ class MineruProcessor:
                     if os.path.exists(content_file):
                         with open(content_file, "r", encoding="utf-8") as f:
                             results[file_name]["content_list"] = json.load(f)
+            else:
+                logger.error(f"解析目录不存在: {parse_dir}")
         
         return results
 
 
-def parse_image_to_markdown(
-    image_path: Union[str, Path],
+def excel_to_markdown(excel_bytes: bytes) -> str:
+    """
+    将Excel文件转换为HTML表格格式
+    
+    Args:
+        excel_bytes: Excel文件的二进制数据
+        
+    Returns:
+        HTML表格格式的字符串
+        
+    Raises:
+        ValueError: 无效的输入数据
+        Exception: 处理过程中的其他错误
+    """
+    try:
+        logger.info("开始处理Excel文件")
+        
+        # 读取Excel文件
+        excel = pd.read_excel(io.BytesIO(excel_bytes))
+        
+        logger.info(f"Excel文件读取成功，包含 {len(excel)} 行数据，{len(excel.columns)} 列")
+        
+        # 处理列名，将NaN列名替换为有意义的名字
+        columns = []
+        for i, col in enumerate(excel.columns):
+            if pd.isna(col) or str(col).startswith('Unnamed:'):
+                columns.append(f"列{i+1}")
+            else:
+                columns.append(str(col))
+        
+        # 开始构建HTML表格
+        html_parts = ['<table>']
+        
+        # 添加表头行
+        html_parts.append('<tr>')
+        for col in columns:
+            html_parts.append(f'<td>{col}</td>')
+        html_parts.append('</tr>')
+        
+        # 获取表格主体
+        excel_table_body = list(excel.iloc[0:].values)
+        
+        # 将每一个列表项转换为HTML行
+        for row in excel_table_body:
+            html_parts.append('<tr>')
+            for cell in row:
+                # 处理NaN值
+                if pd.isna(cell):
+                    html_parts.append('<td></td>')
+                else:
+                    # 转义HTML特殊字符
+                    cell_str = str(cell)
+                    cell_str = cell_str.replace('&', '&amp;')
+                    cell_str = cell_str.replace('<', '&lt;')
+                    cell_str = cell_str.replace('>', '&gt;')
+                    cell_str = cell_str.replace('"', '&quot;')
+                    cell_str = cell_str.replace("'", '&#39;')
+                    html_parts.append(f'<td>{cell_str}</td>')
+            html_parts.append('</tr>')
+        
+        # 结束HTML表格
+        html_parts.append('</table>')
+        
+        # 拼接成完整的HTML表格
+        html_table = ''.join(html_parts)
+        
+        logger.info("Excel转HTML表格完成")
+        return html_table
+        
+    except Exception as e:
+        logger.error(f"Excel转HTML表格失败: {str(e)}")
+        raise
+
+
+def parse_document_from_bytes(
+    file_bytes: bytes,
+    file_name: str = "document",
+    file_type: Optional[str] = None,
     output_dir: str = "./output",
     model_type: str = "vlm-transformers",
-    dpi: int = 300,
     **kwargs
 ) -> str:
     """
-    解析图像文件为Markdown格式
+    主函数：从二进制文件流解析文档为Markdown格式
     
     Args:
-        image_path: 图像文件路径
+        file_bytes: 文件的二进制数据
+        file_name: 文件名，用于输出文件命名
+        file_type: 文件类型（可选，如果不提供会自动检测）
         output_dir: 输出目录，默认"./output"
         model_type: 模型类型，默认"vlm-transformers"
-        dpi: 图像分辨率，默认300
         **kwargs: 其他配置参数
         
     Returns:
         Markdown格式的解析结果
         
     Raises:
-        FileNotFoundError: 文件不存在
-        ValueError: 不支持的文件格式
+        ValueError: 无效的输入数据
         Exception: 处理过程中的其他错误
     """
-    # 初始化解析器
-    doc_parser = DocumentParser(dpi=dpi, output_dir=output_dir)
-    mineru_processor = MineruProcessor(model_type=model_type, **kwargs)
+    if not file_bytes:
+        raise ValueError("文件二进制数据不能为空")
     
-    # 转换为Path对象
-    image_path = Path(image_path)
-    file_name = safe_stem(image_path.stem)
+    logger.info(f"开始解析文档: {file_name}")
+    logger.info(f"文件大小: {len(file_bytes)} bytes")
     
-    # 创建唯一的输出目录
-    unique_dir = os.path.join(output_dir, str(uuid.uuid4()))
-    os.makedirs(unique_dir, exist_ok=True)
+    # 检测文件类型
+    if file_type is None:
+        file_type = detect_file_type(file_bytes, file_name)
+        logger.info(f"检测到文件类型: {file_type}")
     
-    try:
-        # 加载文件字节数据
-        file_bytes = doc_parser.load_file_bytes(image_path)
-        
-        # 处理文件
-        results = mineru_processor.process_files(
-            file_bytes_list=[file_bytes],
-            file_names=[file_name],
-            output_dir=unique_dir
-        )
-        
-        # 返回Markdown内容
-        if file_name in results and "md_content" in results[file_name]:
-            return results[file_name]["md_content"]
-        else:
-            raise Exception("未能生成Markdown内容")
-            
-    except Exception as e:
-        logger.error(f"图像解析失败: {str(e)}")
-        raise
-    
-
-def parse_multiple_files(
-    file_paths: List[Union[str, Path]],
-    output_dir: str = "./output",
-    model_type: str = "vlm-transformers",
-    dpi: int = 300,
-    **kwargs
-) -> Dict[str, str]:
-    """
-    批量解析多个文件为Markdown格式
-    
-    Args:
-        file_paths: 文件路径列表
-        output_dir: 输出目录，默认"./output"
-        model_type: 模型类型，默认"vlm-transformers"
-        dpi: 图像分辨率，默认300
-        **kwargs: 其他配置参数
-        
-    Returns:
-        文件名到Markdown内容的字典
-    """
-    # 初始化解析器
-    doc_parser = DocumentParser(dpi=dpi, output_dir=output_dir)
-    mineru_processor = MineruProcessor(model_type=model_type, **kwargs)
-    
-    # 创建唯一的输出目录
-    unique_dir = os.path.join(output_dir, str(uuid.uuid4()))
-    os.makedirs(unique_dir, exist_ok=True)
+    # 安全的文件名处理
+    safe_file_name = safe_stem(file_name)
     
     try:
-        # 准备文件数据
-        file_bytes_list = []
-        file_names = []
-        
-        for file_path in file_paths:
-            file_path = Path(file_path)
-            file_name = safe_stem(file_path.stem)
-            file_bytes = doc_parser.load_file_bytes(file_path)
+        if file_type in ['pdf', 'jpg']:
+            # 使用MinerU处理PDF和图像文件
+            logger.info(f"使用MinerU处理 {file_type} 文件")
             
-            file_bytes_list.append(file_bytes)
-            file_names.append(file_name)
-        
-        # 批量处理文件
-        results = mineru_processor.process_files(
-            file_bytes_list=file_bytes_list,
-            file_names=file_names,
-            output_dir=unique_dir
-        )
-        
-        # 提取Markdown内容
-        markdown_results = {}
-        for file_name in file_names:
-            if file_name in results and "md_content" in results[file_name]:
-                markdown_results[file_name] = results[file_name]["md_content"]
+            # 对于图像文件，需要先转换为PDF格式
+            if file_type == 'jpg':
+                logger.info("图像文件，转换为PDF格式")
+                from mineru.utils.pdf_image_tools import images_bytes_to_pdf_bytes
+                file_bytes = images_bytes_to_pdf_bytes(file_bytes)
+                logger.info("图像转PDF完成")
+            
+            # 初始化MinerU处理器
+            mineru_processor = MineruProcessor(model_type=model_type, **kwargs)
+            
+            # 创建唯一的输出目录
+            unique_dir = os.path.join(output_dir, str(uuid.uuid4()))
+            os.makedirs(unique_dir, exist_ok=True)
+            
+            # 处理文件
+            results = mineru_processor.process_files(
+                file_bytes_list=[file_bytes],
+                file_names=[safe_file_name],
+                output_dir=unique_dir
+            )
+            
+            # 返回Markdown内容
+            if safe_file_name in results and "md_content" in results[safe_file_name]:
+                logger.info("MinerU处理成功")
+                markdown = results[safe_file_name]["md_content"]
             else:
-                markdown_results[file_name] = f"# 解析失败\n\n文件 {file_name} 未能生成Markdown内容。"
-        
-        return markdown_results
-        
+                raise Exception("MinerU未能生成Markdown内容")
+                
+        elif file_type == 'xlsx':
+            # 使用Excel转HTML表格处理
+            logger.info("使用Excel转HTML表格处理")
+            markdown = excel_to_markdown(file_bytes)
+            
+        else:
+            raise ValueError(f"不支持的文件类型: {file_type}")
+            
     except Exception as e:
-        logger.error(f"批量文件解析失败: {str(e)}")
+        logger.error(f"文档解析失败: {str(e)}")
         raise
+    # 保存md文件到output目录
+    with open(f'{output_dir}/{safe_file_name}.md', 'w', encoding='utf-8') as f:
+        f.write(markdown)
+    logger.info(f"Markdown文件已保存到: {output_dir}/{safe_file_name}.md")
+    return {'text_list': [
+        {
+            'file_type': f'{file_type}',
+            'file_text': markdown
+        }
+     ]}
 
 
 if __name__ == "__main__":
-    # 示例用法
+    """
+    测试文档解析功能
+    """
+    # file_path = "./test/基金E账户App投资者公募基金持有信息-【2025-02-26】.xlsx"
+    # file_path = "/Users/jackliu/Downloads/基金交易截图/F66D2E4D-578B-4537-930B-5CA18583A079_4_5005_c.jpeg"
+    file_path = "/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/test/证券查询业务_在线_1311657086082001（无持仓）-封基.pdf"
+
+    file_path = Path(file_path)
+    
+    if not file_path.exists():
+        print(f"测试文件不存在: {file_path}")
+        exit(1)
+    
+    # 读取文件二进制数据
+    with open(file_path, 'rb') as f:
+        file_bytes = f.read()
+    
+    # 调用主函数处理
     try:
-        # 单个图像解析
-        image_path = "基金交易截图/08940DC9-2B05-40EE-BB29-EE22F08EE309_4_5005_c.jpeg"
-        if os.path.exists(image_path):
-            markdown_content = parse_image_to_markdown(image_path)
-            print("=== 单个图像解析结果 ===")
-            print(markdown_content[:500] + "..." if len(markdown_content) > 500 else markdown_content)
+        result = parse_document_from_bytes(
+            file_bytes=file_bytes,
+            file_name=file_path.name,
+            output_dir='output',
+            model_type='pipeline'
+        )
+        print("解析成功:")
+        print(result)
     except Exception as e:
-        print(f"示例运行失败: {str(e)}")
+        print(f"解析失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
