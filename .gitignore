@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# VSCode
+.vscode/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Node
+node_modules/
+
+# Logs
+*.log
+
+# Excel
+*.xlsx
+
+# 环境和依赖
+venv/
+backend/venv/
+
+# 输出和上传目录
+backend/outputs/
+backend/uploads/
+
+# 其他
+.env
+.env.*
