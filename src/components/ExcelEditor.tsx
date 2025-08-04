@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Button, message, Spin, Card } from 'antd'
+import { Button, App, Spin, Card } from 'antd'
 import { DownloadOutlined, SaveOutlined } from '@ant-design/icons'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
@@ -12,6 +12,7 @@ interface ExcelEditorProps {
 }
 
 const ExcelEditor: React.FC<ExcelEditorProps> = ({ excelUrl, fileName, onSave }) => {
+  const { message } = App.useApp()
   const [loading, setLoading] = useState(false)
   const [excelData, setExcelData] = useState<any[][]>([])
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null)
@@ -28,7 +29,14 @@ const ExcelEditor: React.FC<ExcelEditorProps> = ({ excelUrl, fileName, onSave })
   const loadExcelFile = async (url: string) => {
     setLoading(true)
     try {
-      const response = await fetch(url)
+      // 构建完整的URL
+      const fullUrl = url.startsWith('http') ? url : `http://localhost:8000${url}`
+      
+      const response = await fetch(fullUrl)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
       const arrayBuffer = await response.arrayBuffer()
       const wb = XLSX.read(arrayBuffer, { type: 'array' })
       setWorkbook(wb)
@@ -45,7 +53,7 @@ const ExcelEditor: React.FC<ExcelEditorProps> = ({ excelUrl, fileName, onSave })
       message.success('Excel文件加载成功')
     } catch (error) {
       console.error('加载Excel文件失败:', error)
-      message.error('加载Excel文件失败')
+      message.error(`加载Excel文件失败: ${error instanceof Error ? error.message : '未知错误'}`)
     } finally {
       setLoading(false)
     }

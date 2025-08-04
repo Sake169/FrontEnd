@@ -6,7 +6,7 @@ import {
   Input, 
   Select, 
   Card, 
-  message, 
+  App, 
   Row, 
   Col,
   Space,
@@ -31,6 +31,7 @@ interface FileUploadProps {
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
+  const { message } = App.useApp()
   const [form] = Form.useForm()
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [uploading, setUploading] = useState(false)
