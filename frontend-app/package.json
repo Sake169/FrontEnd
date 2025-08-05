@@ -14,6 +14,10 @@
     "@ant-design/icons": "^5.2.6",
     "@ant-design/pro-components": "^2.6.48",
     "@ant-design/pro-layout": "^7.17.16",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^7.2.0",
+    "@types/react-router-dom": "^5.3.3",
     "ag-grid-community": "^34.1.0",
     "ag-grid-react": "^34.1.0",
     "antd": "^5.12.8",
@@ -22,6 +26,7 @@
     "luckysheet": "^2.1.13",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-router-dom": "^7.7.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

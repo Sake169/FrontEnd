@@ -9,7 +9,8 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.core.dependencies import get_logger
-from app.api import upload, excel, ai
+from app.core.database import init_db
+from app.api import upload, excel, ai, auth, family_member, securities_report
 from app.services.file_service import FileService
 from app.services.excel_service import ExcelService
 from app.services.ai_service import AIService
@@ -36,6 +37,14 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时执行
     logger.info("正在启动后端服务...")
+    
+    # 初始化数据库
+    try:
+        init_db()
+        logger.info("[SUCCESS] 数据库初始化完成")
+    except Exception as e:
+        logger.error(f"[ERROR] 数据库初始化失败: {e}")
+        raise
     
     # 创建必要的目录
     Path(settings.upload_dir).mkdir(exist_ok=True)
@@ -80,9 +89,12 @@ if Path("static").exists():
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 注册路由
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
 app.include_router(upload.router, prefix="/api/v1", tags=["文件上传"])
 app.include_router(excel.router, prefix="/api/v1", tags=["Excel处理"])
 app.include_router(ai.router, prefix="/api/v1", tags=["AI服务"])
+app.include_router(family_member.router, prefix="/api/v1/family-members", tags=["家属亲戚管理"])
+app.include_router(securities_report.router, prefix="/api/v1/securities-reports", tags=["证券填报管理"])
 
 # 依赖注入
 def get_file_service() -> FileService:
