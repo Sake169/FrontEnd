@@ -130,40 +130,35 @@ class TableExtractionService:
 
     def write_to_excel_template(self, data: Dict, template_path: Path, output_path: Path) -> bool:
         """将数据写入已有Excel模板"""
-        try:
-            logger.info(f"开始写入Excel模板: {template_path}")
-            
-            # 加载模板文件
-            wb = load_workbook(template_path)
-            
-            # 处理每种记录类型
-            for file_data in data.get("files", []):
-                for record in file_data.get("records", []):
-                    record_type = record["record_type"]
-                    if record_type not in wb.sheetnames:
-                        logger.warning(f"模板中缺少对应的工作表: {record_type}")
-                        continue
-                    
-                    sheet = wb[record_type]
-                    # 找到第一个空行
-                    row = sheet.max_row + 1
-                    
-                    # 获取字段映射关系
-                    field_map = self.FIELD_MAPPING.get(record_type, {})
-                    
-                    # 写入数据
-                    for col in range(1, sheet.max_column + 1):
-                        header = sheet.cell(row=1, column=col).value
-                        if header in field_map:
-                            json_key = field_map[header]
-                            value = record["data"].get(json_key, "")
-                            sheet.cell(row=row, column=col, value=value)
-            
-            # 保存新文件
-            wb.save(output_path)
-            logger.info(f"成功保存Excel文件: {output_path}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"写入Excel模板失败: {str(e)}", exc_info=True)
-            raise ValueError(f"写入Excel模板失败: {str(e)}")
+        logger.info(f"开始写入Excel模板: {template_path}")
+        
+        # 加载模板文件
+        wb = load_workbook(template_path)
+        
+        # 处理每种记录类型
+        for file_data in data.get("files", []):
+            for record in file_data.get("records", []):
+                record_type = record["record_type"]
+                if record_type not in wb.sheetnames:
+                    logger.warning(f"模板中缺少对应的工作表: {record_type}")
+                    continue
+                
+                sheet = wb[record_type]
+                # 找到第一个空行
+                row = sheet.max_row + 1
+                
+                # 获取字段映射关系
+                field_map = self.FIELD_MAPPING.get(record_type, {})
+                
+                # 写入数据
+                for col in range(1, sheet.max_column + 1):
+                    header = sheet.cell(row=1, column=col).value
+                    if header in field_map:
+                        json_key = field_map[header]
+                        value = record["data"].get(json_key, "")
+                        sheet.cell(row=row, column=col, value=value)
+        
+        # 保存新文件
+        wb.save(output_path)
+        logger.info(f"成功保存Excel文件: {output_path}")
+        return True

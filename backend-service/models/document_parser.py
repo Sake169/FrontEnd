@@ -6,6 +6,7 @@
 from argparse import FileType
 import uuid
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
@@ -395,12 +396,38 @@ def parse_document_from_bytes(
     with open(f'{output_dir}/{safe_file_name}.md', 'w', encoding='utf-8') as f:
         f.write(markdown)
     logger.info(f"Markdown文件已保存到: {output_dir}/{safe_file_name}.md")
-    return {'text_list': [
+    
+    # 返回结果
+    result = {'text_list': [
         {
             'file_type': f'{file_type}',
             'file_text': markdown
         }
      ]}
+    
+    # 如果指定了模板路径，则进行进一步处理
+    template_path = kwargs.get('template_path')
+    if template_path and Path(template_path).exists():
+        try:
+            # 导入并调用main.py的处理函数
+            sys.path.append('/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/backend-service/models/qwen-api-framework')
+            from extactor import process_document_parsing_result
+            
+            # 处理文档解析结果
+            processing_result = process_document_parsing_result(
+                result, 
+                Path(output_dir), 
+                Path(template_path)
+            )
+            
+            # 将处理结果添加到返回结果中
+            result['processing_result'] = processing_result
+            
+        except Exception as e:
+            logger.warning(f"进一步处理失败: {str(e)}")
+            result['processing_error'] = str(e)
+    
+    return result
 
 
 if __name__ == "__main__":
@@ -413,25 +440,13 @@ if __name__ == "__main__":
 
     file_path = Path(file_path)
     
-    if not file_path.exists():
-        print(f"测试文件不存在: {file_path}")
-        exit(1)
-    
     # 读取文件二进制数据
     with open(file_path, 'rb') as f:
         file_bytes = f.read()
-    
-    # 调用主函数处理
-    try:
-        result = parse_document_from_bytes(
-            file_bytes=file_bytes,
-            file_name=file_path.name,
-            output_dir='output',
-            model_type='pipeline'
-        )
-        print("解析成功:")
-        print(result)
-    except Exception as e:
-        print(f"解析失败: {str(e)}")
-        import traceback
-        traceback.print_exc()
+
+    result = parse_document_from_bytes(
+        file_bytes=file_bytes,
+        file_name=file_path.name,
+        output_dir='/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/output',
+        model_type='pipeline'
+    )
