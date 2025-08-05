@@ -1,0 +1,22 @@
+# 核心依赖
+PyMuPDF>=1.23.0  # PDF处理
+pandas>=1.5.0    # Excel处理
+opencv-python>=4.8.0  # 图像处理
+Pillow>=10.0.0   # 图像处理
+numpy>=1.24.0    # 数值计算
+
+# MinerU相关依赖
+pypdfium2>=4.0.0  # PDF处理库
+loguru>=0.7.0     # 日志库
+python-multipart>=0.0.6  # 文件上传支持
+
+# 可选依赖 - MinerU相关
+# mineru>=0.1.0  # 多模态文档解析（需要根据实际安装方式调整）
+
+# 开发依赖
+pytest>=7.0.0    # 测试框架
+black>=23.0.0    # 代码格式化
+flake8>=6.0.0    # 代码检查
+
+# 其他工具
+tqdm>=4.65.0     # 进度条 
