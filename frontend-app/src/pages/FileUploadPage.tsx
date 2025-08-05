@@ -1,12 +1,15 @@
 import React, { useState } from 'react'
-import { Card, Steps, Divider, Alert, Space, Typography } from 'antd'
+import { Card, Steps, Divider, Alert, Space, Typography, message } from 'antd'
 import { 
   UploadOutlined, 
   FileExcelOutlined, 
-  CheckCircleOutlined 
+  CheckCircleOutlined,
+  UserOutlined 
 } from '@ant-design/icons'
 import FileUpload from '../components/FileUpload'
 import ExcelEditor from '../components/ExcelEditor'
+import InvestorSelector from '../components/InvestorSelector'
+import { InvestorResponse } from '../services/investorService'
 
 const { Title, Paragraph } = Typography
 
@@ -14,9 +17,14 @@ const FileUploadPage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0)
   const [excelUrl, setExcelUrl] = useState<string>('')
   const [fileName, setFileName] = useState<string>('')
+  const [selectedInvestor, setSelectedInvestor] = useState<InvestorResponse | null>(null)
 
   // 处理上传成功
   const handleUploadSuccess = (url: string, name: string) => {
+    if (!selectedInvestor) {
+      message.error('请先选择或新增投资人信息')
+      return
+    }
     setExcelUrl(url)
     setFileName(name)
     setCurrentStep(1)
@@ -33,13 +41,19 @@ const FileUploadPage: React.FC = () => {
     setCurrentStep(0)
     setExcelUrl('')
     setFileName('')
+    setSelectedInvestor(null)
+  }
+
+  // 处理投资人变更
+  const handleInvestorChange = (investor: InvestorResponse | null) => {
+    setSelectedInvestor(investor)
   }
 
   const steps = [
     {
-      title: '上传文件',
-      description: '上传证券交易截图或PDF文件，并填写相关人员信息',
-      icon: <UploadOutlined />
+      title: '选择投资人',
+      description: '选择或新增投资人信息，然后上传证券交易截图或PDF文件',
+      icon: <UserOutlined />
     },
     {
       title: '编辑Excel',
@@ -68,6 +82,7 @@ const FileUploadPage: React.FC = () => {
           message="系统说明"
           description={
             <div>
+              <p>• 首先选择或新增投资人信息（姓名、证件、联系方式等）</p>
               <p>• 支持上传图片格式（JPG、PNG、GIF等）和PDF文件</p>
               <p>• 系统将使用AI模型识别交易信息并生成结构化Excel文件</p>
               <p>• 生成的Excel文件支持在线编辑和下载</p>
@@ -92,7 +107,16 @@ const FileUploadPage: React.FC = () => {
       {/* 主要内容区域 */}
       <div style={{ minHeight: '500px' }}>
         {currentStep === 0 && (
-          <FileUpload onUploadSuccess={handleUploadSuccess} />
+          <div>
+            {/* 投资人选择 */}
+            <InvestorSelector
+              selectedInvestor={selectedInvestor}
+              onInvestorChange={handleInvestorChange}
+            />
+            
+            {/* 文件上传 */}
+            <FileUpload onUploadSuccess={handleUploadSuccess} />
+          </div>
         )}
 
         {currentStep === 1 && (
