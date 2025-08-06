@@ -123,16 +123,16 @@ def check_extraction_quality(extracted_data: dict) -> bool:
             for record in file_data.get('records', []):
                 total_records += 1
                 data = record.get('data', {})
-                # 零申报 改为 False
-                if data.get('零申报', '').strip() == 'True':
-                    data['零申报'] = False
                 # 检查必需的三个字段
                 # 1. 产品代码或产品名称或企业名称
+                product_1_code = data.get('证券代码', '').strip()
+                product_1_name = data.get('证券名称', '').strip()
                 product_code = data.get('产品代码', '').strip()
                 product_name = data.get('产品名称', '').strip()
                 enterprise_name = data.get('企业名称', '').strip()
 
-                has_product_info = bool(product_code) or bool(product_name) or bool(enterprise_name)
+                has_product_info = bool(product_code) or bool(product_name) \
+                    or bool(enterprise_name) or bool(product_1_code) or bool(product_1_name)
                 
                 # 2. 日期信息（交易日期或持仓日期或成交日期）
                 trade_date = data.get('交易日期', '').strip()
@@ -141,18 +141,22 @@ def check_extraction_quality(extracted_data: dict) -> bool:
                 has_date_info = bool(trade_date) or bool(trade_1_date) or bool(trade_2_date)
                 
                 # 3. 交易份额或交易金额或持仓份额
+                trade_1_amount = data.get('实缴金额（万元）', None)
+                trade_2_amount = data.get('交易价格', None)
                 trade_amount = data.get('交易份额', None)
-                trade_money = data.get('交易金额', None)
                 position_amount = data.get('持仓份额', None)
+                position_1_amount = data.get('持仓数量（股）', None)
+
                 has_amount_info = (trade_amount is not None and trade_amount != '') or \
-                                 (trade_money is not None and trade_money != '') or \
-                                 (position_amount is not None and position_amount != '')
+                                 (position_amount is not None and position_amount != '') or \
+                                 (trade_1_amount is not None and trade_1_amount != '') or \
+                                 (trade_2_amount is not None and trade_2_amount != '') or \
+                                 (position_1_amount is not None and position_1_amount != '')
                 
                 # 如果三个必需字段都有值，则该记录质量良好
                 if has_product_info and has_date_info and has_amount_info:
                     valid_records += 1
-                    logger.debug(f"记录质量良好: 产品={product_name or product_code}, "
-                               f"日期={trade_date or trade_1_date or trade_2_date}, 份额/金额={trade_amount or trade_money or position_amount}")
+                    logger.debug(f"记录质量良好")
                 else:
                     logger.info(f"记录质量不佳: 产品信息={'有' if has_product_info else '无'}, "
                               f"日期信息={'有' if has_date_info else '无'}, "
@@ -570,7 +574,7 @@ def parse_document_from_bytes(
     if template_path and Path(template_path).exists():
         try:
             # 导入并调用main.py的处理函数
-            sys.path.append('/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/backend-service/models/qwen-api-framework')
+            sys.path.append('./backend-service/models/qwen-api-framework')
             from extactor import process_document_parsing_result
             
             # 处理文档解析结果

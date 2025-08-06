@@ -46,13 +46,14 @@ def process_markdown_content(markdown_content: str, output_dir: Path, template_p
         
         # 提取结构化数据
         result = service.extract_typed_records(markdown_content)
+
         # 保存JSON报告
         json_path = output_dir / "typed_report.json"
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
         
         # 写入Excel模板
-        excel_path = output_dir / "filled_template.xlsx"
+        excel_path = "/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/output/filled_template.xlsx"
         if service.write_to_excel_template(result, template_path, excel_path):
             logger.info(f"Excel报告已生成: {excel_path}")
         
