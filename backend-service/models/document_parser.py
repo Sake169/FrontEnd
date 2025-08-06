@@ -211,7 +211,7 @@ def detect_file_type(file_bytes: bytes, file_name: str = "") -> str:
                     with io.BytesIO(file_bytes) as bio:
                         with zipfile.ZipFile(bio) as zf:
                             if any(name.startswith('xl/') for name in zf.namelist()):
-                                return 'excel'
+                                return 'xlsx'
                 except:
                     pass
             
@@ -551,6 +551,7 @@ def parse_document_from_bytes(
             markdown = excel_to_markdown(file_bytes)
             
         else:
+            print('file_type:', file_type)
             raise ValueError(f"不支持的文件类型: {file_type}")
             
     except Exception as e:
