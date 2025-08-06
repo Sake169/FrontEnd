@@ -6,6 +6,7 @@
 from argparse import FileType
 import uuid
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
@@ -18,12 +19,160 @@ import mimetypes
 # MinerU相关导入
 from mineru.cli.common import do_parse, read_fn, pdf_suffixes, image_suffixes, prepare_env
 import re
+import fitz  # PyMuPDF
 
 
 def safe_stem(file_path):
     """安全的文件名stem处理，只保留字母、数字、下划线和点"""
     stem = Path(file_path).stem
     return re.sub(r'[^\w.]', '_', stem)
+
+
+def is_pdf_text_extractable(pdf_bytes: bytes) -> bool:
+    """
+    检测PDF文件是否包含可提取的文字
+    
+    Args:
+        pdf_bytes: PDF文件的二进制数据
+        
+    Returns:
+        bool: True表示可以提取文字，False表示主要是图像
+    """
+    try:
+        # 使用PyMuPDF检测文字
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        
+        total_chars = 0
+        total_pages = len(doc)
+        
+        # 检查前几页的文字内容
+        check_pages = min(3, total_pages)  # 只检查前3页
+        
+        for page_num in range(check_pages):
+            page = doc[page_num]
+            text = page.get_text()
+            # 去除空白字符后计算字符数
+            clean_text = ''.join(text.split())
+            total_chars += len(clean_text)
+        
+        doc.close()
+        
+        # 如果平均每页有超过100个字符，认为是文字PDF
+        avg_chars_per_page = total_chars / check_pages if check_pages > 0 else 0
+        is_text_pdf = avg_chars_per_page > 100
+        
+        logger.info(f"PDF文字检测: 平均每页{avg_chars_per_page:.0f}个字符, 判断为{'文字PDF' if is_text_pdf else '图像PDF'}")
+        return is_text_pdf
+        
+    except Exception as e:
+        logger.error(f"PDF文字检测失败: {str(e)}")
+        return False  # 检测失败时默认使用图像处理
+
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """
+    从PDF中提取文字内容
+    
+    Args:
+        pdf_bytes: PDF文件的二进制数据
+        
+    Returns:
+        str: 提取的文字内容
+    """
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        full_text = ""
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            text = page.get_text()
+            full_text += f"\n--- 第{page_num + 1}页 ---\n"
+            full_text += text
+        
+        doc.close()
+        
+        logger.info(f"成功提取PDF文字，共{len(full_text)}个字符")
+        return full_text.strip()
+        
+    except Exception as e:
+        logger.error(f"PDF文字提取失败: {str(e)}")
+        return ""
+
+
+def check_extraction_quality(extracted_data: dict) -> bool:
+    """
+    检查提取数据的质量
+    
+    Args:
+        extracted_data: 提取的结构化数据
+        
+    Returns:
+        bool: True表示质量良好，False表示需要二次解析
+    """
+    try:
+        # 如果数据为空或格式不正确，认为质量不佳
+        if not extracted_data or 'files' not in extracted_data:
+            logger.info("数据质量检查: 数据为空或格式错误，质量不佳")
+            return False
+        
+        total_records = 0
+        valid_records = 0
+        
+        # 遍历所有文件和记录
+        for file_data in extracted_data.get('files', []):
+            for record in file_data.get('records', []):
+                total_records += 1
+                data = record.get('data', {})
+                # 检查必需的三个字段
+                # 1. 产品代码或产品名称或企业名称
+                product_1_code = data.get('证券代码', '').strip()
+                product_1_name = data.get('证券名称', '').strip()
+                product_code = data.get('产品代码', '').strip()
+                product_name = data.get('产品名称', '').strip()
+                enterprise_name = data.get('企业名称', '').strip()
+
+                has_product_info = bool(product_code) or bool(product_name) \
+                    or bool(enterprise_name) or bool(product_1_code) or bool(product_1_name)
+                
+                # 2. 日期信息（交易日期或持仓日期或成交日期）
+                trade_date = data.get('交易日期', '').strip()
+                trade_1_date = data.get('持仓日期', '').strip()
+                trade_2_date = data.get('成交日期', '').strip()
+                has_date_info = bool(trade_date) or bool(trade_1_date) or bool(trade_2_date)
+                
+                # 3. 交易份额或交易金额或持仓份额
+                trade_1_amount = data.get('实缴金额（万元）', None)
+                trade_2_amount = data.get('交易价格', None)
+                trade_amount = data.get('交易份额', None)
+                position_amount = data.get('持仓份额', None)
+                position_1_amount = data.get('持仓数量（股）', None)
+
+                has_amount_info = (trade_amount is not None and trade_amount != '') or \
+                                 (position_amount is not None and position_amount != '') or \
+                                 (trade_1_amount is not None and trade_1_amount != '') or \
+                                 (trade_2_amount is not None and trade_2_amount != '') or \
+                                 (position_1_amount is not None and position_1_amount != '')
+                
+                # 如果三个必需字段都有值，则该记录质量良好
+                if has_product_info and has_date_info and has_amount_info:
+                    valid_records += 1
+                    logger.debug(f"记录质量良好")
+                else:
+                    logger.info(f"记录质量不佳: 产品信息={'有' if has_product_info else '无'}, "
+                              f"日期信息={'有' if has_date_info else '无'}, "
+                              f"份额/金额信息={'有' if has_amount_info else '无'}")
+        
+        # 只有所有记录都符合要求才认为质量良好
+        quality_good = (total_records > 0) and (valid_records == total_records)
+        
+        logger.info(f"数据质量检查: 总记录数={total_records}, 有效记录数={valid_records}, "
+                   f"质量={'良好' if quality_good else '需要改进'}")
+        
+        return quality_good
+        
+    except Exception as e:
+        logger.error(f"数据质量检查失败: {str(e)}")
+        return True  # 检查失败时默认认为质量良好
 
 
 def detect_file_type(file_bytes: bytes, file_name: str = "") -> str:
@@ -62,7 +211,7 @@ def detect_file_type(file_bytes: bytes, file_name: str = "") -> str:
                     with io.BytesIO(file_bytes) as bio:
                         with zipfile.ZipFile(bio) as zf:
                             if any(name.startswith('xl/') for name in zf.namelist()):
-                                return 'excel'
+                                return 'xlsx'
                 except:
                     pass
             
@@ -349,36 +498,52 @@ def parse_document_from_bytes(
     
     try:
         if file_type in ['pdf', 'jpg']:
-            # 使用MinerU处理PDF和图像文件
-            logger.info(f"使用MinerU处理 {file_type} 文件")
+            # 处理PDF文件
+            if file_type == 'pdf':
+                # 检查PDF是否包含可提取的文字
+                if is_pdf_text_extractable(file_bytes):
+                    logger.info("PDF包含可提取文字，使用文字提取方案")
+                    markdown = extract_text_from_pdf(file_bytes)
+                else:
+                    logger.info("PDF主要为图像，使用MinerU处理")
+                    # 使用MinerU处理图像PDF
+                    mineru_processor = MineruProcessor(model_type=model_type, **kwargs)
+                    unique_dir = os.path.join(output_dir, str(uuid.uuid4()))
+                    os.makedirs(unique_dir, exist_ok=True)
+                    
+                    results = mineru_processor.process_files(
+                        file_bytes_list=[file_bytes],
+                        file_names=[safe_file_name],
+                        output_dir=unique_dir
+                    )
+                    
+                    if safe_file_name in results and "md_content" in results[safe_file_name]:
+                        markdown = results[safe_file_name]["md_content"]
+                    else:
+                        raise Exception("MinerU未能生成Markdown内容")
             
-            # 对于图像文件，需要先转换为PDF格式
-            if file_type == 'jpg':
-                logger.info("图像文件，转换为PDF格式")
+            # 处理图像文件
+            elif file_type == 'jpg':
+                logger.info("图像文件，使用MinerU处理")
                 from mineru.utils.pdf_image_tools import images_bytes_to_pdf_bytes
+                # 保存原始图像字节数据用于可能的二次解析
+                original_image_bytes = file_bytes
                 file_bytes = images_bytes_to_pdf_bytes(file_bytes)
-                logger.info("图像转PDF完成")
-            
-            # 初始化MinerU处理器
-            mineru_processor = MineruProcessor(model_type=model_type, **kwargs)
-            
-            # 创建唯一的输出目录
-            unique_dir = os.path.join(output_dir, str(uuid.uuid4()))
-            os.makedirs(unique_dir, exist_ok=True)
-            
-            # 处理文件
-            results = mineru_processor.process_files(
-                file_bytes_list=[file_bytes],
-                file_names=[safe_file_name],
-                output_dir=unique_dir
-            )
-            
-            # 返回Markdown内容
-            if safe_file_name in results and "md_content" in results[safe_file_name]:
-                logger.info("MinerU处理成功")
-                markdown = results[safe_file_name]["md_content"]
-            else:
-                raise Exception("MinerU未能生成Markdown内容")
+                
+                mineru_processor = MineruProcessor(model_type=model_type, **kwargs)
+                unique_dir = os.path.join(output_dir, str(uuid.uuid4()))
+                os.makedirs(unique_dir, exist_ok=True)
+                
+                results = mineru_processor.process_files(
+                    file_bytes_list=[file_bytes],
+                    file_names=[safe_file_name],
+                    output_dir=unique_dir
+                )
+                
+                if safe_file_name in results and "md_content" in results[safe_file_name]:
+                    markdown = results[safe_file_name]["md_content"]
+                else:
+                    raise Exception("MinerU未能生成Markdown内容")
                 
         elif file_type == 'xlsx':
             # 使用Excel转HTML表格处理
@@ -386,6 +551,7 @@ def parse_document_from_bytes(
             markdown = excel_to_markdown(file_bytes)
             
         else:
+            print('file_type:', file_type)
             raise ValueError(f"不支持的文件类型: {file_type}")
             
     except Exception as e:
@@ -395,12 +561,121 @@ def parse_document_from_bytes(
     with open(f'{output_dir}/{safe_file_name}.md', 'w', encoding='utf-8') as f:
         f.write(markdown)
     logger.info(f"Markdown文件已保存到: {output_dir}/{safe_file_name}.md")
-    return {'text_list': [
+    
+    # 返回结果
+    result = {'text_list': [
         {
             'file_type': f'{file_type}',
             'file_text': markdown
         }
      ]}
+    
+    # 如果指定了模板路径，则进行进一步处理
+    template_path = kwargs.get('template_path')
+    if template_path and Path(template_path).exists():
+        try:
+            # 导入并调用main.py的处理函数
+            sys.path.append('./backend-service/models/qwen-api-framework')
+            from extactor import process_document_parsing_result
+            
+            # 处理文档解析结果
+            processing_result = process_document_parsing_result(
+                result, 
+                Path(output_dir), 
+                Path(template_path)
+            )
+            
+            # 检查提取数据的质量
+            if processing_result.get('success') and 'extracted_data' in processing_result:
+                extraction_quality = check_extraction_quality(processing_result['extracted_data'])
+                
+                # 如果质量不佳且当前使用的不是vlm-transformers，进行二次解析
+                if not extraction_quality and model_type != 'vlm-transformers' and not kwargs.get('is_second_parsing', False):
+                    logger.info("数据质量不佳，使用vlm-transformers进行二次解析")
+                    
+                    try:
+                        # 重新解析文档内容
+                        second_markdown = None
+                        if file_type == 'pdf':
+                            # 对于PDF，强制使用MinerU
+                            mineru_processor = MineruProcessor(model_type='vlm-transformers', **kwargs)
+                            unique_dir = os.path.join(output_dir, str(uuid.uuid4()) + "_second")
+                            os.makedirs(unique_dir, exist_ok=True)
+                            
+                            results = mineru_processor.process_files(
+                                file_bytes_list=[file_bytes],
+                                file_names=[safe_file_name + "_second"],
+                                output_dir=unique_dir
+                            )
+                            
+                            if safe_file_name + "_second" in results and "md_content" in results[safe_file_name + "_second"]:
+                                second_markdown = results[safe_file_name + "_second"]["md_content"]
+                        
+                        elif file_type == 'jpg':
+                            # 对于图像，使用vlm-transformers模式的MinerU
+                            from mineru.utils.pdf_image_tools import images_bytes_to_pdf_bytes
+                            # 使用保存的原始图像字节数据
+                            if 'original_image_bytes' in locals():
+                                image_pdf_bytes = images_bytes_to_pdf_bytes(original_image_bytes)
+                                
+                                mineru_processor = MineruProcessor(model_type='vlm-transformers', **kwargs)
+                                unique_dir = os.path.join(output_dir, str(uuid.uuid4()) + "_second")
+                                os.makedirs(unique_dir, exist_ok=True)
+                                
+                                results = mineru_processor.process_files(
+                                    file_bytes_list=[image_pdf_bytes],
+                                    file_names=[safe_file_name + "_second"],
+                                    output_dir=unique_dir
+                                )
+                                
+                                if safe_file_name + "_second" in results and "md_content" in results[safe_file_name + "_second"]:
+                                    second_markdown = results[safe_file_name + "_second"]["md_content"]
+                            else:
+                                # 如果没有保存原始数据，跳过二次解析
+                                logger.warning("未找到原始图像数据，跳过二次解析")
+                                second_markdown = None
+                        
+                        # 如果成功获取二次解析的内容，重新处理
+                        if second_markdown:
+                            second_result = {'text_list': [{'file_type': file_type, 'file_text': second_markdown}]}
+                            
+                            # 重新提取数据
+                            second_processing_result = process_document_parsing_result(
+                                second_result, 
+                                Path(output_dir), 
+                                Path(template_path)
+                            )
+                            
+                            # 检查二次解析的质量
+                            if second_processing_result.get('success'):
+                                logger.info("二次解析成功，质量改善")
+                                result['text_list'][0]['file_text'] = second_markdown
+                                result['processing_result'] = second_processing_result
+                                result['second_parsing'] = True
+                            else:
+                                logger.warning("二次解析处理失败，使用原始结果")
+                                result['processing_result'] = processing_result
+                                result['second_parsing_failed'] = True
+                        else:
+                            logger.warning("二次解析未产生内容，使用原始结果")
+                            result['processing_result'] = processing_result
+                            result['second_parsing_no_content'] = True
+                            
+                    except Exception as e:
+                        logger.error(f"二次解析失败: {str(e)}")
+                        result['processing_result'] = processing_result
+                        result['second_parsing_error'] = str(e)
+                else:
+                    # 质量良好或已经是vlm-transformers，使用当前结果
+                    result['processing_result'] = processing_result
+            else:
+                result['processing_result'] = processing_result
+            
+        except Exception as e:
+            logger.warning(f"进一步处理失败: {str(e)}")
+            result['processing_error'] = str(e)
+    
+    return result
 
 
 if __name__ == "__main__":
@@ -413,25 +688,13 @@ if __name__ == "__main__":
 
     file_path = Path(file_path)
     
-    if not file_path.exists():
-        print(f"测试文件不存在: {file_path}")
-        exit(1)
-    
     # 读取文件二进制数据
     with open(file_path, 'rb') as f:
         file_bytes = f.read()
-    
-    # 调用主函数处理
-    try:
-        result = parse_document_from_bytes(
-            file_bytes=file_bytes,
-            file_name=file_path.name,
-            output_dir='output',
-            model_type='pipeline'
-        )
-        print("解析成功:")
-        print(result)
-    except Exception as e:
-        print(f"解析失败: {str(e)}")
-        import traceback
-        traceback.print_exc()
+
+    result = parse_document_from_bytes(
+        file_bytes=file_bytes,
+        file_name=file_path.name,
+        output_dir='/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/output',
+        model_type='pipeline'
+    )

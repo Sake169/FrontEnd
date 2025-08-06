@@ -1,6 +1,8 @@
 # 核心依赖
 PyMuPDF>=1.23.0  # PDF处理
+PyPDF2>=3.0.0    # PDF文字提取
 pandas>=1.5.0    # Excel处理
+openpyxl>=3.1.0  # Excel文件处理
 opencv-python>=4.8.0  # 图像处理
 Pillow>=10.0.0   # 图像处理
 numpy>=1.24.0    # 数值计算

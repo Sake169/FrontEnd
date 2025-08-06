@@ -42,7 +42,6 @@ class TableExtractionService:
             "证券名称": "证券名称",
             "持仓数量（股）": "持仓数量（股）",
             "持仓日期": "持仓日期",
-            "是否零申报": "是否零申报",
             "备注": "备注"
         },
         "场外基金报备交易信息": {
@@ -52,7 +51,6 @@ class TableExtractionService:
             "场外基金投向": "场外基金投向",
             "交易份额": "交易份额",
             "交易日期": "交易日期",
-            "是否零申报": "是否零申报",
             "备注": "备注"
         },
         "场外基金报备持仓信息": {
@@ -60,7 +58,6 @@ class TableExtractionService:
             "产品名称": "产品名称",
             "持仓份额": "持仓份额",
             "持仓日期": "持仓日期",
-            "是否零申报": "是否零申报",
             "备注": "备注"
         },
         "未上市股权报备交易信息": {
@@ -71,7 +68,6 @@ class TableExtractionService:
             "实缴金额（万元）": "实缴金额（万元）",
             "持股比例（%）": "持股比例（%）",
             "交易日期": "交易日期",
-            "是否零申报": "是否零申报",
             "备注": "备注",
          },
          "未上市股权报备持仓信息": {
@@ -82,7 +78,6 @@ class TableExtractionService:
             "实缴金额（万元）": "实缴金额（万元）",
             "持股比例（%）": "持股比例（%）",
             "持仓日期": "持仓日期",
-            "是否零申报": "是否零申报",
             "备注": "备注",
          }
     }
@@ -129,41 +124,88 @@ class TableExtractionService:
                     raise ValueError(error_msg)
 
     def write_to_excel_template(self, data: Dict, template_path: Path, output_path: Path) -> bool:
-        """将数据写入已有Excel模板"""
-        try:
-            logger.info(f"开始写入Excel模板: {template_path}")
+        """将数据写入已有Excel模板，合并所有sheet内容到一个sheet中"""
+        logger.info(f"开始写入Excel模板: {template_path}")
+        
+        # 加载模板文件
+        wb = load_workbook(template_path)
+        
+        # 创建一个新的合并工作表，或使用第一个工作表
+        merged_sheet_name = "合并数据"
+        if merged_sheet_name in wb.sheetnames:
+            # 删除已存在的合并工作表
+            wb.remove(wb[merged_sheet_name])
+        
+        # 创建新的合并工作表
+        merged_sheet = wb.create_sheet(merged_sheet_name, 0)
+        
+        # 按记录类型分组数据
+        records_by_type = {}
+        for file_data in data.get("files", []):
+            for record in file_data.get("records", []):
+                record_type = record["record_type"]
+                if record_type not in records_by_type:
+                    records_by_type[record_type] = []
+                records_by_type[record_type].append(record)
+        
+        current_row = 1
+        
+        # 按记录类型顺序处理数据
+        for record_type in self.RECORD_TYPES:
+            if record_type not in records_by_type:
+                continue
+                
+            records = records_by_type[record_type]
+            if not records:
+                continue
             
-            # 加载模板文件
-            wb = load_workbook(template_path)
+            # 写入记录类型标题行
+            merged_sheet.cell(row=current_row, column=1, value=record_type)
+            # 设置标题行样式
+            title_cell = merged_sheet.cell(row=current_row, column=1)
+            title_cell.font = Font(bold=True, size=14)
+            title_cell.fill = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
+            current_row += 1
             
-            # 处理每种记录类型
-            for file_data in data.get("files", []):
-                for record in file_data.get("records", []):
-                    record_type = record["record_type"]
-                    if record_type not in wb.sheetnames:
-                        logger.warning(f"模板中缺少对应的工作表: {record_type}")
-                        continue
-                    
-                    sheet = wb[record_type]
-                    # 找到第一个空行
-                    row = sheet.max_row + 1
-                    
-                    # 获取字段映射关系
-                    field_map = self.FIELD_MAPPING.get(record_type, {})
-                    
-                    # 写入数据
-                    for col in range(1, sheet.max_column + 1):
-                        header = sheet.cell(row=1, column=col).value
-                        if header in field_map:
-                            json_key = field_map[header]
-                            value = record["data"].get(json_key, "")
-                            sheet.cell(row=row, column=col, value=value)
+            # 获取字段映射关系
+            field_map = self.FIELD_MAPPING.get(record_type, {})
             
-            # 保存新文件
-            wb.save(output_path)
-            logger.info(f"成功保存Excel文件: {output_path}")
-            return True
+            if field_map:
+                # 写入字段标题行
+                col = 1
+                for field_name in field_map.keys():
+                    header_cell = merged_sheet.cell(row=current_row, column=col, value=field_name)
+                    header_cell.font = Font(bold=True)
+                    header_cell.fill = PatternFill(start_color="F0F0F0", end_color="F0F0F0", fill_type="solid")
+                    col += 1
+                current_row += 1
+                
+                # 写入数据行
+                for record in records:
+                    col = 1
+                    for json_key in field_map.values():
+                        value = record["data"].get(json_key, "")
+                        merged_sheet.cell(row=current_row, column=col, value=value)
+                        col += 1
+                    current_row += 1
             
-        except Exception as e:
-            logger.error(f"写入Excel模板失败: {str(e)}", exc_info=True)
-            raise ValueError(f"写入Excel模板失败: {str(e)}")
+            # 在不同记录类型之间添加空行
+            current_row += 1
+        
+        # 调整列宽
+        for col in merged_sheet.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            merged_sheet.column_dimensions[column].width = adjusted_width
+        
+        # 保存新文件
+        wb.save(output_path)
+        logger.info(f"成功保存Excel文件: {output_path}")
+        return True
