@@ -9,5 +9,5 @@ processor = IntegratedDocumentProcessor(
     output_dir="./output",
     template_path="/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/template.xlsx"
 )
-result = processor.process_document_from_file("/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/test/8C45C5F5-DD5C-4708-A274-5F917EE8383F_4_5005_c.jpeg",
+result = processor.process_document_from_file("/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/test/基金E账户App投资者公募基金持有信息-【2025-02-26】.xlsx",
                         model_type='pipeline')

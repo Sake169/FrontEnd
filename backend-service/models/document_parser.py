@@ -130,21 +130,25 @@ def check_extraction_quality(extracted_data: dict) -> bool:
                 product_name = data.get('产品名称', '').strip()
                 has_product_info = bool(product_code) or bool(product_name)
                 
-                # 2. 交易日期
+                # 2. 日期信息（交易日期或持仓日期或成交日期）
                 trade_date = data.get('交易日期', '').strip()
-                has_date_info = bool(trade_date)
+                position_date = data.get('持仓日期', '').strip()
+                trade_date = data.get('成交日期', '').strip()
+                has_date_info = bool(trade_date) or bool(position_date) or bool(trade_date)
                 
-                # 3. 交易份额或交易金额
+                # 3. 交易份额或交易金额或持仓份额
                 trade_amount = data.get('交易份额', None)
                 trade_money = data.get('交易金额', None)
+                position_amount = data.get('持仓份额', None)
                 has_amount_info = (trade_amount is not None and trade_amount != '') or \
-                                 (trade_money is not None and trade_money != '')
+                                 (trade_money is not None and trade_money != '') or \
+                                 (position_amount is not None and position_amount != '')
                 
                 # 如果三个必需字段都有值，则该记录质量良好
                 if has_product_info and has_date_info and has_amount_info:
                     valid_records += 1
                     logger.debug(f"记录质量良好: 产品={product_name or product_code}, "
-                               f"日期={trade_date}, 份额/金额={trade_amount or trade_money}")
+                               f"日期={trade_date or position_date or trade_date}, 份额/金额={trade_amount or trade_money or position_amount}")
                 else:
                     logger.info(f"记录质量不佳: 产品信息={'有' if has_product_info else '无'}, "
                               f"日期信息={'有' if has_date_info else '无'}, "
