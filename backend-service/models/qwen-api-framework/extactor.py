@@ -46,7 +46,6 @@ def process_markdown_content(markdown_content: str, output_dir: Path, template_p
         
         # 提取结构化数据
         result = service.extract_typed_records(markdown_content)
-        print('extact result', result)
         # 保存JSON报告
         json_path = output_dir / "typed_report.json"
         with open(json_path, 'w', encoding='utf-8') as f:

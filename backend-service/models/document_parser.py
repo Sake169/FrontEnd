@@ -125,16 +125,18 @@ def check_extraction_quality(extracted_data: dict) -> bool:
                 data = record.get('data', {})
                 
                 # 检查必需的三个字段
-                # 1. 产品代码或名称
+                # 1. 产品代码或产品名称或企业名称
                 product_code = data.get('产品代码', '').strip()
                 product_name = data.get('产品名称', '').strip()
-                has_product_info = bool(product_code) or bool(product_name)
+                enterprise_name = data.get('企业名称', '').strip()
+
+                has_product_info = bool(product_code) or bool(product_name) or bool(enterprise_name)
                 
                 # 2. 日期信息（交易日期或持仓日期或成交日期）
                 trade_date = data.get('交易日期', '').strip()
-                position_date = data.get('持仓日期', '').strip()
-                trade_date = data.get('成交日期', '').strip()
-                has_date_info = bool(trade_date) or bool(position_date) or bool(trade_date)
+                trade_1_date = data.get('持仓日期', '').strip()
+                trade_2_date = data.get('成交日期', '').strip()
+                has_date_info = bool(trade_date) or bool(trade_1_date) or bool(trade_2_date)
                 
                 # 3. 交易份额或交易金额或持仓份额
                 trade_amount = data.get('交易份额', None)
@@ -148,7 +150,7 @@ def check_extraction_quality(extracted_data: dict) -> bool:
                 if has_product_info and has_date_info and has_amount_info:
                     valid_records += 1
                     logger.debug(f"记录质量良好: 产品={product_name or product_code}, "
-                               f"日期={trade_date or position_date or trade_date}, 份额/金额={trade_amount or trade_money or position_amount}")
+                               f"日期={trade_date or trade_1_date or trade_2_date}, 份额/金额={trade_amount or trade_money or position_amount}")
                 else:
                     logger.info(f"记录质量不佳: 产品信息={'有' if has_product_info else '无'}, "
                               f"日期信息={'有' if has_date_info else '无'}, "
