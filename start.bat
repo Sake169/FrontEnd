@@ -54,7 +54,7 @@ echo 依赖检查完成，正在启动服务...
 echo.
 
 REM 启动后端服务
-echo 启动后端服务 (端口: 8000)...
+echo 启动后端服务 (端口: 8001)...
 start "后端服务" cmd /k "cd backend && venv\Scripts\activate && python start.py"
 
 REM 等待后端启动
@@ -70,8 +70,8 @@ echo ====================================
 echo 服务启动完成！
 echo ====================================
 echo 前端地址: http://localhost:3000
-echo 后端地址: http://localhost:8000
-echo API文档: http://localhost:8000/docs
+echo 后端地址: http://localhost:8001
+echo API文档: http://localhost:8001/docs
 echo ====================================
 echo.
 echo 按任意键关闭此窗口...

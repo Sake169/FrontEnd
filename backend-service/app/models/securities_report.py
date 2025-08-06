@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from app.models.user import Base
+from app.core.database import Base
 
 # 证券类型
 class SecuritiesType:

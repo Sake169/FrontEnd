@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     
     # 服务器配置
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8001
     debug: bool = True
     reload: bool = True
     
@@ -22,7 +22,25 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:5173",  # Vite默认端口
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:3003",
+        "http://localhost:3004",
+        "http://localhost:3005",
+        "http://localhost:3006",
+        "http://localhost:3007",
+        "http://localhost:3008",
+        "http://localhost:3009",  # 当前前端端口
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
+        "http://127.0.0.1:3003",
+        "http://127.0.0.1:3004",
+        "http://127.0.0.1:3005",
+        "http://127.0.0.1:3006",
+        "http://127.0.0.1:3007",
+        "http://127.0.0.1:3008",
+        "http://127.0.0.1:3009"
     ]
     
     # 文件配置

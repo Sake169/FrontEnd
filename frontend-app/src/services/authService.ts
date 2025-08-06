@@ -1,44 +1,7 @@
-import axios, { AxiosResponse } from 'axios';
+import { AxiosResponse } from 'axios';
+import api from './api';
 
-// API基础URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
-// 创建axios实例
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// 请求拦截器 - 添加认证token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// 响应拦截器 - 处理认证错误
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Token过期或无效，清除本地存储并跳转到登录页
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user_info');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
 
 // 用户角色枚举
 export enum UserRole {
@@ -87,6 +50,7 @@ export interface UserCreateRequest {
   password: string;
   full_name?: string;
   phone?: string;
+  id_number?: string;
   department?: string;
   position?: string;
   role?: UserRole;
@@ -140,7 +104,7 @@ class AuthService {
    * 用户登录
    */
   async login(credentials: LoginRequest): Promise<LoginResponse> {
-    const response: AxiosResponse<LoginResponse> = await api.post('/auth/login', credentials);
+    const response: AxiosResponse<LoginResponse> = await api.post('/v1/auth/login', credentials);
     
     // 保存token和用户信息到本地存储
     localStorage.setItem('access_token', response.data.access_token);
@@ -162,7 +126,7 @@ class AuthService {
    * 获取当前用户信息
    */
   async getCurrentUser(): Promise<User> {
-    const response: AxiosResponse<User> = await api.get('/auth/me');
+    const response: AxiosResponse<User> = await api.get('/v1/auth/me');
     
     // 更新本地存储的用户信息
     localStorage.setItem('user_info', JSON.stringify(response.data));
@@ -174,7 +138,7 @@ class AuthService {
    * 更新当前用户信息
    */
   async updateCurrentUser(userData: UserUpdateRequest): Promise<User> {
-    const response: AxiosResponse<User> = await api.put('/auth/me', userData);
+    const response: AxiosResponse<User> = await api.put('/v1/auth/me', userData);
     
     // 更新本地存储的用户信息
     localStorage.setItem('user_info', JSON.stringify(response.data));
@@ -186,14 +150,14 @@ class AuthService {
    * 修改密码
    */
   async changePassword(passwordData: PasswordChangeRequest): Promise<void> {
-    await api.post('/auth/change-password', passwordData);
+    await api.post('/v1/auth/change-password', passwordData);
   }
 
   /**
    * 注册新用户（仅管理员）
    */
   async registerUser(userData: UserCreateRequest): Promise<User> {
-    const response: AxiosResponse<User> = await api.post('/auth/register', userData);
+    const response: AxiosResponse<User> = await api.post('/v1/auth/public-register', userData);
     return response.data;
   }
 
@@ -201,7 +165,7 @@ class AuthService {
    * 获取用户列表（仅管理员）
    */
   async getUsers(params?: UserListParams): Promise<User[]> {
-    const response: AxiosResponse<User[]> = await api.get('/auth/users', { params });
+    const response: AxiosResponse<User[]> = await api.get('/v1/auth/users', { params });
     return response.data;
   }
 
@@ -232,7 +196,7 @@ class AuthService {
    * 获取用户统计（仅管理员）
    */
   async getUserStats(): Promise<UserStats> {
-    const response: AxiosResponse<UserStats> = await api.get('/auth/stats');
+    const response: AxiosResponse<UserStats> = await api.get('/v1/auth/stats');
     return response.data;
   }
 

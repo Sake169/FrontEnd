@@ -130,9 +130,13 @@ const InvestorSelector: React.FC<InvestorSelectorProps> = ({
             allowClear
             showSearch
             optionFilterProp="children"
-            filterOption={(input, option) =>
-              (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
-            }
+            filterOption={(input, option) => {
+              if (!option?.value) return false
+              const investor = investors.find(inv => inv.id === option.value)
+              if (!investor) return false
+              return investor.name.toLowerCase().includes(input.toLowerCase()) ||
+                     investor.id_number.toLowerCase().includes(input.toLowerCase())
+            }}
             notFoundContent={loading ? <Spin size="small" /> : <Empty description="暂无投资人" />}
           >
             {investors.map(investor => (
@@ -140,9 +144,9 @@ const InvestorSelector: React.FC<InvestorSelectorProps> = ({
                 <Space>
                   <Text strong>{investor.name}</Text>
                   <Text type="secondary">({investor.id_number})</Text>
-                  {investor.relationship_type && (
-                    <Tag size="small">{investor.relationship_type}</Tag>
-                  )}
+                  {investor.relationship && (
+                     <Tag>{investor.relationship}</Tag>
+                   )}
                 </Space>
               </Option>
             ))}
@@ -181,7 +185,7 @@ const InvestorSelector: React.FC<InvestorSelectorProps> = ({
             </Col>
             <Col span={12}>
               <Text strong>关系：</Text>
-              <Text>{selectedInvestor.relationship_type || '未填写'}</Text>
+              <Text>{selectedInvestor.relationship || '未填写'}</Text>
             </Col>
             <Col span={12}>
               <Text strong>证件类型：</Text>
@@ -197,10 +201,10 @@ const InvestorSelector: React.FC<InvestorSelectorProps> = ({
                 <Text>{selectedInvestor.phone}</Text>
               </Col>
             )}
-            {selectedInvestor.securities_account && (
+            {selectedInvestor.bank_account && (
               <Col span={12}>
-                <Text strong>证券账号：</Text>
-                <Text>{selectedInvestor.securities_account}</Text>
+                <Text strong>银行账号：</Text>
+                <Text>{selectedInvestor.bank_account}</Text>
               </Col>
             )}
           </Row>

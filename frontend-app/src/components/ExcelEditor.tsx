@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react'
-import { Button, App, Spin, Card } from 'antd'
-import { DownloadOutlined, SaveOutlined } from '@ant-design/icons'
+import { Button, App, Spin, Card, Space, Modal, Form, Input, InputNumber, Select } from 'antd'
+import { DownloadOutlined, SaveOutlined, DatabaseOutlined, ReloadOutlined } from '@ant-design/icons'
 import { AgGridReact } from 'ag-grid-react'
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-alpine.css'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
-import { saveExcelData } from '../services/api'
+import api, { saveExcelData, getQuarterlyReport, saveQuarterlyReport, updateQuarterlyReport, QuarterlyReportData } from '../services/api'
 import type { ColDef, GridReadyEvent, CellValueChangedEvent } from 'ag-grid-community'
 
 // 注册AG Grid模块
@@ -17,35 +17,67 @@ interface ExcelEditorProps {
   excelUrl?: string
   fileName?: string
   onSave?: (data: any[][]) => void
+  investorId?: number
+  quarter?: string
+  year?: number
+  portfolioId?: number
+  showDatabaseSave?: boolean
 }
 
-const ExcelEditor: React.FC<ExcelEditorProps> = ({ excelUrl, fileName, onSave }) => {
+const ExcelEditor: React.FC<ExcelEditorProps> = ({ 
+  excelUrl, 
+  fileName, 
+  onSave,
+  investorId = 1,
+  quarter = '2024Q1',
+  year = 2024,
+  portfolioId,
+  showDatabaseSave = true
+}) => {
   const { message } = App.useApp()
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [excelData, setExcelData] = useState<any[][]>([])
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null)
   const [currentSheet, setCurrentSheet] = useState<string>('')
+  const [isModalVisible, setIsModalVisible] = useState(false)
+  const [form] = Form.useForm()
   const tableRef = useRef<HTMLDivElement>(null)
 
   // 加载Excel文件
   useEffect(() => {
     if (excelUrl) {
       loadExcelFile(excelUrl)
+    } else {
+      // 如果没有提供URL，加载默认的季度报告
+      loadQuarterlyReport()
     }
   }, [excelUrl])
+
+  // 加载季度投资报告
+  const loadQuarterlyReport = async () => {
+    setLoading(true)
+    try {
+      const response = await getQuarterlyReport()
+      if (response && response.data) {
+        setExcelData(response.data)
+        setFileName('季度投资报告')
+        message.success('季度投资报告加载成功')
+      }
+    } catch (error) {
+      console.error('加载季度投资报告失败:', error)
+      message.error('加载季度投资报告失败')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const loadExcelFile = async (url: string) => {
     setLoading(true)
     try {
-      // 构建完整的URL
-      const fullUrl = url.startsWith('http') ? url : `http://localhost:8000${url}`
-      
-      const response = await fetch(fullUrl)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const arrayBuffer = await response.arrayBuffer()
+      // 使用api实例获取文件
+      const response = await api.get(url, { responseType: 'arraybuffer' })
+      const arrayBuffer = response.data
       const wb = XLSX.read(arrayBuffer, { type: 'array' })
       setWorkbook(wb)
       
@@ -156,6 +188,84 @@ const ExcelEditor: React.FC<ExcelEditorProps> = ({ excelUrl, fileName, onSave })
     }
   }
 
+  // 保存到数据库
+  const handleSaveToDatabase = async () => {
+    try {
+      setSaving(true)
+      const currentData = getGridData()
+      
+      const saveData: QuarterlyReportData = {
+        investorId,
+        quarter,
+        year,
+        portfolioData: currentData
+      }
+
+      let response
+      if (portfolioId) {
+        // 更新现有记录
+        response = await updateQuarterlyReport(portfolioId, saveData)
+      } else {
+        // 创建新记录
+        response = await saveQuarterlyReport(saveData)
+      }
+
+      if (response.success) {
+        message.success(response.message)
+        onSave?.(currentData)
+      }
+    } catch (error) {
+      console.error('保存到数据库失败:', error)
+      message.error('保存到数据库失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // 显示保存配置模态框
+  const showSaveModal = () => {
+    form.setFieldsValue({
+      investorId,
+      quarter,
+      year
+    })
+    setIsModalVisible(true)
+  }
+
+  // 处理模态框确认
+  const handleModalOk = async () => {
+    try {
+      const values = await form.validateFields()
+      setSaving(true)
+      
+      const currentData = getGridData()
+      const saveData: QuarterlyReportData = {
+        investorId: values.investorId,
+        quarter: values.quarter,
+        year: values.year,
+        portfolioData: currentData
+      }
+
+      const response = await saveQuarterlyReport(saveData)
+
+      if (response.success) {
+        message.success(response.message)
+        setIsModalVisible(false)
+        onSave?.(currentData)
+      }
+    } catch (error) {
+      console.error('保存失败:', error)
+      message.error('保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // 处理模态框取消
+  const handleModalCancel = () => {
+    setIsModalVisible(false)
+  }
+
   // 下载Excel文件
   const handleDownload = () => {
     try {
@@ -216,33 +326,102 @@ const ExcelEditor: React.FC<ExcelEditorProps> = ({ excelUrl, fileName, onSave })
   }
 
   return (
-    <Card 
-      title={`Excel编辑器 - ${fileName || '未命名文件'}`}
-      extra={
-        <div className="action-buttons">
-          <Button 
-            type="primary" 
-            icon={<SaveOutlined />} 
-            onClick={handleSave}
-            loading={loading}
+    <>
+      <Card 
+        title={`Excel编辑器 - ${fileName || '季度投资报告'}`}
+        extra={
+          <Space>
+            <Button 
+              icon={<ReloadOutlined />} 
+              onClick={loadQuarterlyReport}
+              loading={loading}
+            >
+              重新加载
+            </Button>
+            <Button 
+              type="primary" 
+              icon={<SaveOutlined />} 
+              onClick={handleSave}
+              loading={loading}
+            >
+              保存文件
+            </Button>
+            {showDatabaseSave && (
+              <Button 
+                type="primary" 
+                icon={<DatabaseOutlined />} 
+                onClick={portfolioId ? handleSaveToDatabase : showSaveModal}
+                loading={saving}
+              >
+                保存到数据库
+              </Button>
+            )}
+            <Button 
+              icon={<DownloadOutlined />} 
+              onClick={handleDownload}
+            >
+              下载
+            </Button>
+          </Space>
+        }
+      >
+        <Spin spinning={loading}>
+          <div ref={tableRef} className="excel-editor-container">
+            {renderTable()}
+          </div>
+        </Spin>
+      </Card>
+
+      {/* 保存配置模态框 */}
+      <Modal
+        title="保存到数据库"
+        open={isModalVisible}
+        onOk={handleModalOk}
+        onCancel={handleModalCancel}
+        confirmLoading={saving}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{
+            investorId,
+            quarter,
+            year
+          }}
+        >
+          <Form.Item
+            label="投资人ID"
+            name="investorId"
+            rules={[{ required: true, message: '请输入投资人ID' }]}
           >
-            保存
-          </Button>
-          <Button 
-            icon={<DownloadOutlined />} 
-            onClick={handleDownload}
+            <InputNumber min={1} style={{ width: '100%' }} />
+          </Form.Item>
+          
+          <Form.Item
+            label="季度"
+            name="quarter"
+            rules={[{ required: true, message: '请选择季度' }]}
           >
-            下载
-          </Button>
-        </div>
-      }
-    >
-      <Spin spinning={loading}>
-        <div ref={tableRef} className="excel-editor-container">
-          {renderTable()}
-        </div>
-      </Spin>
-    </Card>
+            <Select>
+              <Select.Option value="2024Q1">2024年第一季度</Select.Option>
+              <Select.Option value="2024Q2">2024年第二季度</Select.Option>
+              <Select.Option value="2024Q3">2024年第三季度</Select.Option>
+              <Select.Option value="2024Q4">2024年第四季度</Select.Option>
+            </Select>
+          </Form.Item>
+          
+          <Form.Item
+            label="年份"
+            name="year"
+            rules={[{ required: true, message: '请输入年份' }]}
+          >
+            <InputNumber min={2020} max={2030} style={{ width: '100%' }} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
   )
 }
 

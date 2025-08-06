@@ -16,6 +16,7 @@
     "@ant-design/pro-layout": "^7.17.16",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.2.0",
     "@mui/material": "^7.2.0",
     "@types/react-router-dom": "^5.3.3",
     "ag-grid-community": "^34.1.0",

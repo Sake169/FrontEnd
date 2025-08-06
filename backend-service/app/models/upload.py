@@ -11,8 +11,8 @@ class RelatedPersonInfo(BaseModel):
     description: Optional[str] = Field(None, description="备注", max_length=200)
     
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "张三",
                 "relationship": "配偶",
@@ -32,8 +32,8 @@ class UploadResponse(BaseModel):
     created_at: Optional[datetime] = Field(None, description="创建时间", alias="createdAt")
     
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "success": True,
                 "message": "文件上传成功",
@@ -52,7 +52,7 @@ class FileInfo(BaseModel):
     upload_time: datetime = Field(..., description="上传时间", alias="uploadTime")
     
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 class UploadStatus(BaseModel):
     """上传状态模型"""
@@ -63,8 +63,8 @@ class UploadStatus(BaseModel):
     result: Optional[UploadResponse] = Field(None, description="处理结果")
     
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "uploadId": "uuid-string",
                 "status": "completed",

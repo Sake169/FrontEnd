@@ -9,8 +9,8 @@ class SaveExcelRequest(BaseModel):
     sheets: Optional[List[str]] = Field(None, description="工作表名称列表")
     
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "fileName": "report.xlsx",
                 "data": [
@@ -30,7 +30,7 @@ class SaveExcelResponse(BaseModel):
     download_url: Optional[str] = Field(None, description="下载URL", alias="downloadUrl")
     
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 class ExcelFileInfo(BaseModel):
     """Excel文件信息模型"""
@@ -42,7 +42,7 @@ class ExcelFileInfo(BaseModel):
     columns: int = Field(0, description="列数")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "name": "report.xlsx",
                 "size": 1024,
@@ -62,8 +62,8 @@ class ExcelData(BaseModel):
     total_columns: int = Field(..., description="总列数", alias="totalColumns")
     
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "headers": ["姓名", "部门", "职位"],
                 "rows": [
@@ -106,7 +106,7 @@ class FileListResponse(BaseModel):
     total: int = Field(..., description="文件总数")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "files": [
                     {

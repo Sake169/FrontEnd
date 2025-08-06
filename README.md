@@ -100,7 +100,7 @@ npm start
 
 #### 方式二：分别启动
 ```bash
-# 启动后端服务 (端口 8000)
+# 启动后端服务 (端口 8001)
 npm run backend
 
 # 启动前端服务 (端口 3000)
@@ -110,8 +110,8 @@ npm run dev
 ### 4. 访问应用
 
 - 前端应用: http://localhost:3000
-- 后端API: http://localhost:8000
-- API文档: http://localhost:8000/docs
+- 后端API: http://localhost:8001
+- API文档: http://localhost:8001/docs
 
 ## 🔧 开发指南
 
@@ -141,7 +141,7 @@ npm run lint:fix
 
 ## 📝 API文档
 
-启动后端服务后，访问 http://localhost:8000/docs 查看完整的API文档。
+启动后端服务后，访问 http://localhost:8001/docs 查看完整的API文档。
 
 ### 主要API端点
 
@@ -196,7 +196,7 @@ cp backend-service/.env.example backend-service/.env
 ```bash
 # 后端
 cd backend-service
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8001
 
 # 前端（使用nginx等静态服务器）
 # 将 frontend-app/dist 目录部署到静态服务器

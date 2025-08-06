@@ -37,7 +37,7 @@ backend/venv/
 # 输出和上传目录
 backend/outputs/
 backend/uploads/
-
+backend-service/uploads/
 # 其他
 .env
 .env.*

@@ -75,7 +75,7 @@ const InvestorForm: React.FC<InvestorFormProps> = ({
       onCancel={onCancel}
       footer={null}
       width={800}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form
         form={form}
@@ -83,7 +83,7 @@ const InvestorForm: React.FC<InvestorFormProps> = ({
         onFinish={handleSubmit}
         initialValues={{
           id_type: 'id_card',
-          relationship_type: '配偶'
+          relationship: '配偶'
         }}
       >
         <Divider orientation="left">基本信息</Divider>
@@ -99,7 +99,7 @@ const InvestorForm: React.FC<InvestorFormProps> = ({
           </Col>
           <Col span={12}>
             <Form.Item
-              name="relationship_type"
+              name="relationship"
               label="与从业人员关系"
               rules={[{ required: true, message: '请选择关系' }]}
             >
@@ -186,34 +186,27 @@ const InvestorForm: React.FC<InvestorFormProps> = ({
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="other_social" label="其他社交账号">
-              <Input placeholder="请输入其他社交账号" />
+            <Form.Item name="weibo" label="微博账号">
+              <Input placeholder="请输入微博账号" />
             </Form.Item>
           </Col>
         </Row>
 
-        <Divider orientation="left">账号信息</Divider>
+        <Divider orientation="left">银行信息</Divider>
         <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="securities_account" label="证券账号">
-              <Input placeholder="请输入证券账号" />
-            </Form.Item>
-          </Col>
           <Col span={12}>
             <Form.Item name="bank_name" label="开户银行">
               <Input placeholder="请输入开户银行" />
             </Form.Item>
           </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={24}>
+          <Col span={12}>
             <Form.Item name="bank_account" label="银行账号">
               <Input placeholder="请输入银行账号" />
             </Form.Item>
           </Col>
         </Row>
 
-        <Form.Item name="notes" label="备注">
+        <Form.Item name="remarks" label="备注">
           <TextArea rows={3} placeholder="请输入备注信息" />
         </Form.Item>
 

@@ -65,12 +65,12 @@ async def login(
         expires_delta=access_token_expires
     )
     
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "expires_in": int(access_token_expires.total_seconds()),
-        "user": UserResponse.from_orm(user)
-    }
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=int(access_token_expires.total_seconds()),
+        user=UserResponse.model_validate(user)
+    )
 
 @router.post("/public-register", response_model=UserResponse, summary="公开注册新用户")
 async def public_register(
@@ -120,7 +120,7 @@ async def public_register(
     db.commit()
     db.refresh(db_user)
     
-    return UserResponse.from_orm(db_user)
+    return UserResponse.model_validate(db_user)
 
 @router.post("/register", response_model=UserResponse, summary="注册新用户")
 async def register(
@@ -172,14 +172,14 @@ async def register(
     db.commit()
     db.refresh(db_user)
     
-    return UserResponse.from_orm(db_user)
+    return UserResponse.model_validate(db_user)
 
 @router.get("/me", response_model=UserResponse, summary="获取当前用户信息")
 async def get_current_user_info(
     current_user: User = Depends(get_current_active_user)
 ):
     """获取当前登录用户信息"""
-    return UserResponse.from_orm(current_user)
+    return UserResponse.model_validate(current_user)
 
 @router.put("/me", response_model=UserResponse, summary="更新当前用户信息")
 async def update_current_user(
@@ -215,7 +215,7 @@ async def update_current_user(
     db.commit()
     db.refresh(current_user)
     
-    return UserResponse.from_orm(current_user)
+    return UserResponse.model_validate(current_user)
 
 @router.post("/change-password", summary="修改密码")
 async def change_password(
@@ -281,7 +281,7 @@ async def get_users(
     # 排序和分页
     users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
     
-    return [UserResponse.from_orm(user) for user in users]
+    return [UserResponse.model_validate(user) for user in users]
 
 @router.get("/users/{user_id}", response_model=UserResponse, summary="获取用户详情")
 async def get_user(
@@ -297,7 +297,7 @@ async def get_user(
             detail="用户不存在"
         )
     
-    return UserResponse.from_orm(user)
+    return UserResponse.model_validate(user)
 
 @router.put("/users/{user_id}", response_model=UserResponse, summary="更新用户信息")
 async def update_user(
@@ -334,7 +334,7 @@ async def update_user(
     db.commit()
     db.refresh(user)
     
-    return UserResponse.from_orm(user)
+    return UserResponse.model_validate(user)
 
 @router.delete("/users/{user_id}", summary="删除用户")
 async def delete_user(

@@ -8,6 +8,8 @@ import AdminDashboard from './components/AdminDashboard';
 import FileUploadPage from './pages/FileUploadPage';
 import FamilyMemberPage from './pages/FamilyMemberPage';
 import SecuritiesReportPage from './pages/SecuritiesReportPage';
+import InvestmentRecords from './pages/InvestmentRecords';
+import QuarterlyReportPage from './pages/QuarterlyReportPage';
 import Layout from './components/Layout';
 import { UserRole } from './services/authService';
 import './App.css';
@@ -134,6 +136,30 @@ const AppContent: React.FC = () => {
           <ProtectedRoute>
             <Layout>
               <SecuritiesReportPage />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* 投资记录管理页面 */}
+      <Route 
+        path="/investment-records" 
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <InvestmentRecords />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* 季度投资报告页面 */}
+      <Route 
+        path="/quarterly-report" 
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <QuarterlyReportPage />
             </Layout>
           </ProtectedRoute>
         } 

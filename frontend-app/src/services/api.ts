@@ -12,7 +12,11 @@ const api = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   (config) => {
-    // 可以在这里添加token等认证信息
+    // 添加认证token
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     console.log('发送请求:', config.method?.toUpperCase(), config.url)
     return config
   },
@@ -30,6 +34,12 @@ api.interceptors.response.use(
   },
   (error) => {
     console.error('响应错误:', error.response?.status, error.message)
+    // 处理认证错误
+    if (error.response?.status === 401) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user_info');
+      window.location.href = '/login';
+    }
     return Promise.reject(error)
   }
 )
@@ -60,7 +70,7 @@ export const uploadFileAndGetExcel = async (data: UploadFileData): Promise<Uploa
     formData.append('file', data.file)
     formData.append('relatedPersonInfo', JSON.stringify(data.relatedPersonInfo))
 
-    const response = await api.post('/upload', formData, {
+    const response = await api.post('/v1/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -82,7 +92,7 @@ export const uploadFileAndGetExcel = async (data: UploadFileData): Promise<Uploa
 // 下载Excel文件
 export const downloadExcel = async (fileName: string): Promise<Blob> => {
   try {
-    const response = await api.get(`/download/${fileName}`, {
+    const response = await api.get(`/v1/excel/download/${fileName}`, {
       responseType: 'blob',
     })
     return response.data
@@ -103,15 +113,66 @@ export interface SaveExcelData {
 
 export const saveExcelData = async (data: SaveExcelData): Promise<{ success: boolean; message: string }> => {
   try {
-    const response = await api.post('/save-excel', data)
+    const response = await api.post('/v1/excel/save', data)
     return response.data
   } catch (error) {
-    console.error('保存Excel失败:', error)
-    // 模拟保存成功
-    return {
-      success: true,
-      message: 'Excel数据保存成功'
+    console.error('保存Excel数据失败:', error)
+    throw error
+  }
+}
+
+// 季度投资报告相关接口
+export interface QuarterlyReportData {
+  investorId: number
+  quarter: string
+  year: number
+  portfolioData: any[][]
+}
+
+export interface SaveQuarterlyReportResponse {
+  success: boolean
+  message: string
+  portfolioId?: number
+}
+
+// 读取季度投资报告
+export const getQuarterlyReport = async (): Promise<{ data: any[][] }> => {
+  try {
+    const response = await api.get('/v1/excel/quarterly-report')
+    return response.data
+  } catch (error) {
+    console.error('读取季度投资报告失败:', error)
+    throw error
+  }
+}
+
+// 保存季度投资报告到数据库
+export const saveQuarterlyReport = async (data: QuarterlyReportData): Promise<SaveQuarterlyReportResponse> => {
+  try {
+    const saveData = {
+      data: data.portfolioData,
+      file_name: 'quarterly_report.xlsx'
     }
+    const response = await api.post(`/v1/excel/quarterly-report/save?investor_id=${data.investorId}&quarter=${data.quarter}&year=${data.year}`, saveData)
+    return response.data
+  } catch (error) {
+    console.error('保存季度投资报告失败:', error)
+    throw error
+  }
+}
+
+// 更新季度投资报告
+export const updateQuarterlyReport = async (portfolioId: number, data: QuarterlyReportData): Promise<SaveQuarterlyReportResponse> => {
+  try {
+    const updateData = {
+      data: data.portfolioData,
+      file_name: 'quarterly_report.xlsx'
+    }
+    const response = await api.put(`/v1/excel/quarterly-report/update?portfolio_id=${portfolioId}`, updateData)
+    return response.data
+  } catch (error) {
+    console.error('更新季度投资报告失败:', error)
+    throw error
   }
 }
 

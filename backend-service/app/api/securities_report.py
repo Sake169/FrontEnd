@@ -94,7 +94,7 @@ def get_securities_reports(
     # 构建响应数据
     items = []
     for report in reports:
-        item_data = SecuritiesReportResponse.from_orm(report).dict()
+        item_data = SecuritiesReportResponse.model_validate(report).model_dump()
         item_data.update({
             'family_member_name': report.family_member.name,
             'family_member_relationship': report.family_member.relationship,

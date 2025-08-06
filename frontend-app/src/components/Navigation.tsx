@@ -19,7 +19,9 @@ import {
   Assessment as AssessmentIcon,
   Upload as UploadIcon,
   Dashboard as DashboardIcon,
-  Security as SecurityIcon
+  Security as SecurityIcon,
+  TrendingUp as InvestmentIcon,
+  TableChart as QuarterlyReportIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -56,6 +58,18 @@ const Navigation: React.FC = () => {
       label: '证券填报',
       path: '/securities-reports',
       icon: <AssessmentIcon />,
+      roles: [UserRole.USER, UserRole.ADMIN]
+    },
+    {
+      label: '投资记录',
+      path: '/investment-records',
+      icon: <InvestmentIcon />,
+      roles: [UserRole.USER, UserRole.ADMIN]
+    },
+    {
+      label: '季度报告',
+      path: '/quarterly-report',
+      icon: <QuarterlyReportIcon />,
       roles: [UserRole.USER, UserRole.ADMIN]
     },
     {

@@ -1,12 +1,11 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 from enum import Enum
-
-Base = declarative_base()
+from app.core.database import Base
 
 class UserRole(str, Enum):
     """用户角色枚举"""
@@ -26,6 +25,7 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False, comment="是否激活")
     is_verified = Column(Boolean, default=False, nullable=False, comment="是否验证")
     phone = Column(String(20), nullable=True, comment="手机号")
+    id_number = Column(String(50), nullable=True, comment="身份证号")
     department = Column(String(100), nullable=True, comment="部门")
     position = Column(String(100), nullable=True, comment="职位")
     avatar_url = Column(String(255), nullable=True, comment="头像URL")
@@ -35,6 +35,9 @@ class User(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False, comment="更新时间")
     created_by = Column(Integer, nullable=True, comment="创建者ID")
     notes = Column(Text, nullable=True, comment="备注")
+    
+    # 关联关系 - 使用字符串引用避免循环导入
+    investors = relationship("Investor", back_populates="user")
 
 # Pydantic 模型用于API
 class UserBase(BaseModel):
@@ -43,6 +46,7 @@ class UserBase(BaseModel):
     email: str
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    id_number: Optional[str] = None
     department: Optional[str] = None
     position: Optional[str] = None
     role: UserRole = UserRole.USER
@@ -59,6 +63,7 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    id_number: Optional[str] = None
     department: Optional[str] = None
     position: Optional[str] = None
     role: Optional[UserRole] = None

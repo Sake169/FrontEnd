@@ -38,14 +38,11 @@ def get_db() -> Generator[Session, None, None]:
 
 def init_db():
     """初始化数据库"""
-    from app.models.user import Base as UserBase
-    from app.models.family_member import Base as FamilyMemberBase
-    from app.models.securities_report import Base as SecuritiesReportBase
+    # 导入所有模型以确保它们被注册到Base.metadata中
+    from app.models import user, family_member, securities_report, investment_record, investor, investment_portfolio
     
     # 创建所有表
-    UserBase.metadata.create_all(bind=engine)
-    FamilyMemberBase.metadata.create_all(bind=engine)
-    SecuritiesReportBase.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     
     # 创建默认管理员用户
     create_default_admin()
@@ -82,7 +79,7 @@ def create_default_admin():
             print("   密码: admin123")
             print("   邮箱: admin@securities.com")
         else:
-            print("ℹ️ 管理员用户已存在")
+            print("!!!管理员用户已存在")
             
         # 检查是否已存在demo用户
         demo_user = db.query(User).filter(
@@ -121,17 +118,14 @@ def create_default_admin():
 
 def reset_database():
     """重置数据库（仅开发环境使用）"""
-    from app.models.user import Base as UserBase
-    from app.models.investor import Base as InvestorBase
+    # 导入所有模型
+    from app.models import user, family_member, securities_report, investment_record, investor, investment_portfolio
     
     # 删除所有表
-    UserBase.metadata.drop_all(bind=engine)
-    FamilyMemberBase.metadata.drop_all(bind=engine)
-    SecuritiesReportBase.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=engine)
     
     # 重新创建表
-    UserBase.metadata.create_all(bind=engine)
-    InvestorBase.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     
     # 创建默认管理员
     create_default_admin()

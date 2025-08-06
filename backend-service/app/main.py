@@ -1,16 +1,17 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 import uvicorn
 import logging
 from pathlib import Path
+import pandas as pd
 
 from app.core.config import settings
 from app.core.dependencies import get_logger
 from app.core.database import init_db
-from app.api import upload, excel, ai, auth, family_member, securities_report
+from app.api import auth, upload, excel, ai, family_member, securities_report, investment_records, investors, investment_portfolios
 from app.services.file_service import FileService
 from app.services.excel_service import ExcelService
 from app.services.ai_service import AIService
@@ -88,6 +89,54 @@ app.add_middleware(
 if Path("static").exists():
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# 处理example.xlsx请求
+@app.get("/api/example.xlsx")
+async def get_example_excel():
+    """返回示例Excel文件"""
+    try:
+        # 尝试从多个位置查找example.xlsx
+        possible_paths = [
+            Path("../example.xlsx"),
+            Path("example.xlsx"),
+            Path("outputs/example.xlsx"),
+            Path("templates/example.xlsx")
+        ]
+        
+        for file_path in possible_paths:
+            if file_path.exists():
+                return FileResponse(
+                    path=file_path,
+                    filename="example.xlsx",
+                    media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+        
+        # 如果找不到文件，创建一个示例Excel文件
+        sample_data = {
+            '交易日期': ['2024-01-15', '2024-01-16', '2024-01-17'],
+            '证券代码': ['000001', '000002', '000003'],
+            '证券名称': ['平安银行', '万科A', '国农科技'],
+            '交易类型': ['买入', '卖出', '买入'],
+            '交易数量': [1000, 500, 2000],
+            '交易价格': [10.50, 25.30, 8.75],
+            '交易金额': [10500.00, 12650.00, 17500.00]
+        }
+        
+        df = pd.DataFrame(sample_data)
+        output_path = Path("outputs")
+        output_path.mkdir(exist_ok=True)
+        excel_path = output_path / "example.xlsx"
+        df.to_excel(excel_path, index=False)
+        
+        return FileResponse(
+            path=excel_path,
+            filename="example.xlsx",
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+    except Exception as e:
+        logger.error(f"获取示例Excel文件失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取示例文件失败")
+
 # 注册路由
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
 app.include_router(upload.router, prefix="/api/v1", tags=["文件上传"])
@@ -95,6 +144,9 @@ app.include_router(excel.router, prefix="/api/v1", tags=["Excel处理"])
 app.include_router(ai.router, prefix="/api/v1", tags=["AI服务"])
 app.include_router(family_member.router, prefix="/api/v1/family-members", tags=["家属亲戚管理"])
 app.include_router(securities_report.router, prefix="/api/v1/securities-reports", tags=["证券填报管理"])
+app.include_router(investment_records.router, prefix="/api/v1", tags=["投资记录管理"])
+app.include_router(investors.router, prefix="/api/v1", tags=["投资人管理"])
+app.include_router(investment_portfolios.router, prefix="/api/v1", tags=["投资组合管理"])
 
 # 依赖注入
 def get_file_service() -> FileService:
@@ -164,20 +216,26 @@ async def service_info():
 # 错误处理
 @app.exception_handler(404)
 async def not_found_handler(request, exc):
-    return {
-        "error": "Not Found",
-        "message": "请求的资源不存在",
-        "status_code": 404
-    }
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": "Not Found",
+            "message": "请求的资源不存在",
+            "status_code": 404
+        }
+    )
 
 @app.exception_handler(500)
 async def internal_error_handler(request, exc):
     logger.error(f"内部服务器错误: {str(exc)}")
-    return {
-        "error": "Internal Server Error",
-        "message": "服务器内部错误",
-        "status_code": 500
-    }
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal Server Error",
+            "message": "服务器内部错误",
+            "status_code": 500
+        }
+    )
 
 # 开发模式下的调试信息
 if settings.debug:

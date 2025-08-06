@@ -69,17 +69,17 @@ pip install -r requirements.txt
 
 ```bash
 # 开发模式
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
 # 生产模式
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
 ## API文档
 
 启动服务后，访问以下地址查看API文档：
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- Swagger UI: http://localhost:8001/docs
+- ReDoc: http://localhost:8001/redoc
 
 ## 主要功能
 
@@ -120,7 +120,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 docker build -t backend-service .
 
 # 运行容器
-docker run -p 8000:8000 backend-service
+docker run -p 8001:8001 backend-service
 ```
 
 ### 生产环境
@@ -128,5 +128,5 @@ docker run -p 8000:8000 backend-service
 建议使用 Gunicorn + Uvicorn 进行生产部署：
 
 ```bash
-gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8001
 ```

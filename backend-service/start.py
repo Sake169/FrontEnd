@@ -16,8 +16,8 @@ def main():
     启动FastAPI服务
     """
     print("正在启动证券公司员工配偶信息报备系统后端服务...")
-    print("API文档地址: http://localhost:8000/docs")
-    print("服务地址: http://localhost:8000")
+    print("API文档地址: http://localhost:8001/docs")
+    print("服务地址: http://localhost:8001")
     print("按 Ctrl+C 停止服务")
     print("-" * 50)
     
@@ -31,7 +31,7 @@ def main():
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=8001,
         reload=True,
         reload_dirs=["."],
         log_level="info"

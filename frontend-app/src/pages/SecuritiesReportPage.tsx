@@ -42,6 +42,7 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import api from '../services/api';
 
 // 证券类型枚举
 const SECURITIES_TYPES = [
@@ -75,7 +76,7 @@ const REPORT_STATUS = [
 interface FamilyMember {
   id: number;
   name: string;
-  relationship_type: string;
+  relationship: string;
 }
 
 // 证券填报接口
@@ -141,17 +142,8 @@ const SecuritiesReportPage: React.FC = () => {
         params.append('securities_employee_username', user?.username || '');
       }
       
-      const response = await fetch(`http://localhost:8000/api/family-members?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setFamilyMembers(data.items || []);
-      }
+      const response = await api.get('/v1/family-members', { params: Object.fromEntries(params) });
+      setFamilyMembers(response.data.items || []);
     } catch (err) {
       console.error('获取家属亲戚列表失败:', err);
     }
@@ -185,18 +177,8 @@ const SecuritiesReportPage: React.FC = () => {
         params.append('securities_employee_username', user?.username || '');
       }
       
-      const response = await fetch(`http://localhost:8000/api/securities-reports?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('获取证券填报列表失败');
-      }
-      
-      const data = await response.json();
+      const response = await api.get('/v1/securities-reports', { params: Object.fromEntries(params) });
+      const data = response.data;
       setReports(data.items || []);
       setTotalPages(data.pages || 1);
       setTotalCount(data.total || 0);
@@ -223,8 +205,8 @@ const SecuritiesReportPage: React.FC = () => {
       };
       
       const url = editingReport 
-        ? `http://localhost:8000/api/securities-reports/${editingReport.id}`
-        : 'http://localhost:8000/api/securities-reports';
+        ? `/api/v1/securities-reports/${editingReport.id}`
+        : '/api/v1/securities-reports';
       
       const method = editingReport ? 'PUT' : 'POST';
       
@@ -264,7 +246,7 @@ const SecuritiesReportPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`http://localhost:8000/api/securities-reports/${id}/submit`, {
+      const response = await fetch(`/api/v1/securities-reports/${id}/submit`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`
@@ -292,7 +274,7 @@ const SecuritiesReportPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`http://localhost:8000/api/securities-reports/${reviewingReport.id}/review`, {
+      const response = await fetch(`/api/v1/securities-reports/${reviewingReport.id}/review`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -330,7 +312,7 @@ const SecuritiesReportPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`http://localhost:8000/api/securities-reports/${id}`, {
+      const response = await fetch(`/api/v1/securities-reports/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`
@@ -669,7 +651,7 @@ const SecuritiesReportPage: React.FC = () => {
             <Grid item xs={12}>
               <Autocomplete
                 options={familyMembers}
-                getOptionLabel={(option) => `${option.name} (${option.relationship_type})`}
+                getOptionLabel={(option) => `${option.name} (${option.relationship})`}
                 value={familyMembers.find(m => m.id === formData.family_member_id) || null}
                 onChange={(_, newValue) => handleFormChange('family_member_id', newValue?.id || 0)}
                 renderInput={(params) => (
@@ -762,7 +744,7 @@ const SecuritiesReportPage: React.FC = () => {
                 fullWidth
                 label="价格 *"
                 type="number"
-                step="0.01"
+                inputProps={{ step: "0.01" }}
                 value={formData.price || ''}
                 onChange={(e) => handleFormChange('price', e.target.value)}
                 required
@@ -773,7 +755,7 @@ const SecuritiesReportPage: React.FC = () => {
                 fullWidth
                 label="金额"
                 type="number"
-                step="0.01"
+                inputProps={{ step: "0.01" }}
                 value={formData.amount || ''}
                 onChange={(e) => handleFormChange('amount', e.target.value)}
                 InputProps={{ readOnly: true }}
@@ -793,7 +775,7 @@ const SecuritiesReportPage: React.FC = () => {
                 fullWidth
                 label="市值"
                 type="number"
-                step="0.01"
+                inputProps={{ step: "0.01" }}
                 value={formData.market_value || ''}
                 onChange={(e) => handleFormChange('market_value', e.target.value)}
               />

@@ -33,8 +33,10 @@ def create_family_member(
     if existing_member:
         raise HTTPException(status_code=400, detail="该证件号码已存在")
     
-    # 创建家属亲戚记录
-    db_family_member = FamilyMember(**family_member.dict())
+    # 创建家属亲戚记录，自动设置employee_username为当前用户
+    family_member_data = family_member.dict()
+    family_member_data['employee_username'] = current_user.username
+    db_family_member = FamilyMember(**family_member_data)
     db.add(db_family_member)
     db.commit()
     db.refresh(db_family_member)

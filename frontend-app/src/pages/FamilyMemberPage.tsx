@@ -25,10 +25,10 @@ import {
   Chip,
   Alert,
   Pagination,
-  Grid,
   Container,
   Fab,
-  Tooltip
+  Tooltip,
+  Autocomplete
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -37,9 +37,12 @@ import {
   Person as PersonIcon,
   People as FamilyIcon,
   Search as SearchIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  ImportExport as ImportIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import api from '../services/api';
+import { investorService, InvestorListResponse } from '../services/investorService';
 
 // 关系类型枚举
 const RELATIONSHIP_TYPES = [
@@ -64,7 +67,7 @@ interface FamilyMember {
   id?: number;
   securities_employee_username: string;
   name: string;
-  relationship_type: string;
+  relationship: string;
   id_type: string;
   id_number: string;
   phone?: string;
@@ -98,6 +101,12 @@ const FamilyMemberPage: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<FamilyMember | null>(null);
   const [formData, setFormData] = useState<Partial<FamilyMember>>({});
+  
+  // 投资人导入状态
+  const [investors, setInvestors] = useState<InvestorListResponse[]>([]);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [selectedInvestor, setSelectedInvestor] = useState<InvestorListResponse | null>(null);
+  const [selectedInvestorDetail, setSelectedInvestorDetail] = useState<any>(null);
 
   // 获取家属亲戚列表
   const fetchFamilyMembers = async () => {
@@ -115,7 +124,7 @@ const FamilyMemberPage: React.FC = () => {
       }
       
       if (filterRelationship) {
-        params.append('relationship_type', filterRelationship);
+        params.append('relationship', filterRelationship);
       }
       
       // 如果不是管理员，只显示当前用户的家属亲戚
@@ -123,18 +132,8 @@ const FamilyMemberPage: React.FC = () => {
         params.append('securities_employee_username', user?.username || '');
       }
       
-      const response = await fetch(`http://localhost:8000/api/family-members?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('获取家属亲戚列表失败');
-      }
-      
-      const data = await response.json();
+      const response = await api.get('/v1/family-members', { params: Object.fromEntries(params) });
+      const data = response.data;
       setFamilyMembers(data.items || []);
       setTotalPages(data.pages || 1);
       setTotalCount(data.total || 0);
@@ -143,6 +142,57 @@ const FamilyMemberPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 获取投资人列表
+  const fetchInvestors = async () => {
+    try {
+      const data = await investorService.getInvestors();
+      setInvestors(data);
+    } catch (err) {
+      console.error('获取投资人列表失败:', err);
+    }
+  };
+
+  // 获取投资人详细信息
+  const fetchInvestorDetail = async (investorId: number) => {
+    try {
+      const detail = await investorService.getInvestor(investorId);
+      setSelectedInvestorDetail(detail);
+    } catch (err) {
+      console.error('获取投资人详细信息失败:', err);
+    }
+  };
+
+  // 从投资人信息导入
+  const importFromInvestor = () => {
+    if (!selectedInvestorDetail) return;
+    
+    const relationshipMap: Record<string, string> = {
+      '配偶': 'spouse',
+      '父母': 'parent',
+      '子女': 'child',
+      '兄弟姐妹': 'sibling',
+      '其他亲属': 'other'
+    };
+    
+    setFormData({
+      name: selectedInvestorDetail.name,
+      relationship: relationshipMap[selectedInvestorDetail.relationship || ''] || 'other',
+      id_type: selectedInvestorDetail.id_type || 'id_card',
+      id_number: selectedInvestorDetail.id_number,
+      phone: selectedInvestorDetail.phone,
+      email: selectedInvestorDetail.email,
+      address: selectedInvestorDetail.address,
+      qq: selectedInvestorDetail.qq,
+      wechat: selectedInvestorDetail.wechat,
+      bank_account: selectedInvestorDetail.bank_account
+    });
+    
+    setImportDialogOpen(false);
+    setSelectedInvestor(null);
+    setSelectedInvestorDetail(null);
+    setDialogOpen(true);
   };
 
   // 保存家属亲戚信息
@@ -156,24 +206,10 @@ const FamilyMemberPage: React.FC = () => {
         securities_employee_username: user?.username || ''
       };
       
-      const url = editingMember 
-        ? `http://localhost:8000/api/family-members/${editingMember.id}`
-        : 'http://localhost:8000/api/family-members';
-      
-      const method = editingMember ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(memberData)
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || '保存失败');
+      if (editingMember) {
+        await api.put(`/family-members/${editingMember.id}`, memberData);
+      } else {
+        await api.post('/v1/family-members', memberData);
       }
       
       setSuccess(editingMember ? '更新成功' : '添加成功');
@@ -198,16 +234,7 @@ const FamilyMemberPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`http://localhost:8000/api/family-members/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('删除失败');
-      }
+      await api.delete(`/family-members/${id}`);
       
       setSuccess('删除成功');
       fetchFamilyMembers();
@@ -223,7 +250,7 @@ const FamilyMemberPage: React.FC = () => {
     setEditingMember(member || null);
     setFormData(member ? { ...member } : {
       name: '',
-      relationship_type: '',
+      relationship: '',
       id_type: 'id_card',
       id_number: '',
       phone: '',
@@ -231,6 +258,12 @@ const FamilyMemberPage: React.FC = () => {
       address: ''
     });
     setDialogOpen(true);
+  };
+
+  // 打开导入对话框
+  const openImportDialog = () => {
+    fetchInvestors();
+    setImportDialogOpen(true);
   };
 
   // 处理表单输入变化
@@ -280,12 +313,12 @@ const FamilyMemberPage: React.FC = () => {
 
       {/* 消息提示 */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
       {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
           {success}
         </Alert>
       )}
@@ -293,8 +326,8 @@ const FamilyMemberPage: React.FC = () => {
       {/* 搜索和过滤 */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={4}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Box sx={{ flex: '1 1 300px', minWidth: '200px' }}>
               <TextField
                 fullWidth
                 label="搜索姓名"
@@ -304,8 +337,8 @@ const FamilyMemberPage: React.FC = () => {
                   startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
                 }}
               />
-            </Grid>
-            <Grid item xs={12} sm={4}>
+            </Box>
+            <Box sx={{ flex: '1 1 300px', minWidth: '200px' }}>
               <FormControl fullWidth>
                 <InputLabel>关系类型</InputLabel>
                 <Select
@@ -321,37 +354,47 @@ const FamilyMemberPage: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<RefreshIcon />}
-                  onClick={fetchFamilyMembers}
-                  disabled={loading}
-                >
-                  刷新
-                </Button>
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => openEditDialog()}
-                >
-                  添加家属
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={() => {
+                  setSearchName('');
+                  setFilterRelationship('');
+                  setPage(1);
+                }}
+              >
+                重置
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<ImportIcon />}
+                onClick={openImportDialog}
+              >
+                从投资人导入
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => openEditDialog()}
+              >
+                新增家属
+              </Button>
+            </Box>
+          </Box>
         </CardContent>
       </Card>
 
       {/* 数据表格 */}
       <Card>
         <CardContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            家属亲戚列表 (共 {totalCount} 条记录)
-          </Typography>
-          
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">
+              家属亲戚列表 ({totalCount} 条记录)
+            </Typography>
+          </Box>
+
           <TableContainer component={Paper} variant="outlined">
             <Table>
               <TableHead>
@@ -367,16 +410,18 @@ const FamilyMemberPage: React.FC = () => {
               </TableHead>
               <TableBody>
                 {familyMembers.map((member) => (
-                  <TableRow key={member.id}>
+                  <TableRow key={member.id} hover>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <PersonIcon sx={{ color: 'text.secondary' }} />
-                        {member.name}
+                        <PersonIcon color="primary" />
+                        <Typography variant="body2" fontWeight="medium">
+                          {member.name}
+                        </Typography>
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={getRelationshipLabel(member.relationship_type)}
+                      <Chip
+                        label={getRelationshipLabel(member.relationship)}
                         size="small"
                         color="primary"
                         variant="outlined"
@@ -437,14 +482,74 @@ const FamilyMemberPage: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* 投资人导入对话框 */}
+      <Dialog open={importDialogOpen} onClose={() => setImportDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>从投资人信息导入</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Autocomplete
+               options={investors}
+               getOptionLabel={(option) => `${option.name} (${option.id_number})`}
+               value={selectedInvestor}
+               onChange={(_, newValue) => {
+                 setSelectedInvestor(newValue);
+                 if (newValue) {
+                   fetchInvestorDetail(newValue.id);
+                 } else {
+                   setSelectedInvestorDetail(null);
+                 }
+               }}
+               renderInput={(params) => (
+                 <TextField
+                   {...params}
+                   label="选择投资人"
+                   placeholder="请选择要导入的投资人信息"
+                   fullWidth
+                 />
+               )}
+               renderOption={(props, option) => (
+                 <Box component="li" {...props}>
+                   <Box>
+                     <Typography variant="body1">{option.name}</Typography>
+                     <Typography variant="body2" color="text.secondary">
+                       {option.relationship || '未设置关系'} - {option.id_number}
+                     </Typography>
+                   </Box>
+                 </Box>
+               )}
+             />
+             {selectedInvestorDetail && (
+               <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                 <Typography variant="subtitle2" gutterBottom>预览信息：</Typography>
+                 <Typography variant="body2">姓名：{selectedInvestorDetail.name}</Typography>
+                 <Typography variant="body2">关系：{selectedInvestorDetail.relationship || '未设置'}</Typography>
+                 <Typography variant="body2">证件号：{selectedInvestorDetail.id_number}</Typography>
+                 <Typography variant="body2">手机：{selectedInvestorDetail.phone || '未填写'}</Typography>
+                 <Typography variant="body2">邮箱：{selectedInvestorDetail.email || '未填写'}</Typography>
+               </Box>
+             )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportDialogOpen(false)}>取消</Button>
+          <Button 
+             onClick={importFromInvestor} 
+             variant="contained"
+             disabled={!selectedInvestorDetail}
+           >
+             导入并编辑
+           </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* 添加/编辑对话框 */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           {editingMember ? '编辑家属亲戚' : '添加家属亲戚'}
         </DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} sm={6}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField
                 fullWidth
                 label="姓名 *"
@@ -452,14 +557,12 @@ const FamilyMemberPage: React.FC = () => {
                 onChange={(e) => handleFormChange('name', e.target.value)}
                 required
               />
-            </Grid>
-            <Grid item xs={12} sm={6}>
               <FormControl fullWidth required>
                 <InputLabel>关系类型</InputLabel>
                 <Select
-                  value={formData.relationship_type || ''}
+                  value={formData.relationship || ''}
                   label="关系类型"
-                  onChange={(e) => handleFormChange('relationship_type', e.target.value)}
+                  onChange={(e) => handleFormChange('relationship', e.target.value)}
                 >
                   {RELATIONSHIP_TYPES.map(type => (
                     <MenuItem key={type.value} value={type.value}>
@@ -468,8 +571,8 @@ const FamilyMemberPage: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
               <FormControl fullWidth required>
                 <InputLabel>证件类型</InputLabel>
                 <Select
@@ -484,8 +587,6 @@ const FamilyMemberPage: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="证件号码 *"
@@ -493,16 +594,14 @@ const FamilyMemberPage: React.FC = () => {
                 onChange={(e) => handleFormChange('id_number', e.target.value)}
                 required
               />
-            </Grid>
-            <Grid item xs={12} sm={6}>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField
                 fullWidth
                 label="联系电话"
                 value={formData.phone || ''}
                 onChange={(e) => handleFormChange('phone', e.target.value)}
               />
-            </Grid>
-            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="邮箱"
@@ -510,57 +609,51 @@ const FamilyMemberPage: React.FC = () => {
                 value={formData.email || ''}
                 onChange={(e) => handleFormChange('email', e.target.value)}
               />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="地址"
-                value={formData.address || ''}
-                onChange={(e) => handleFormChange('address', e.target.value)}
-                multiline
-                rows={2}
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
+            </Box>
+            <TextField
+              fullWidth
+              label="地址"
+              value={formData.address || ''}
+              onChange={(e) => handleFormChange('address', e.target.value)}
+              multiline
+              rows={2}
+            />
+            <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField
                 fullWidth
                 label="QQ号"
                 value={formData.qq || ''}
                 onChange={(e) => handleFormChange('qq', e.target.value)}
               />
-            </Grid>
-            <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
                 label="微信号"
                 value={formData.wechat || ''}
                 onChange={(e) => handleFormChange('wechat', e.target.value)}
               />
-            </Grid>
-            <Grid item xs={12} sm={4}>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField
                 fullWidth
                 label="支付宝账号"
                 value={formData.alipay_account || ''}
                 onChange={(e) => handleFormChange('alipay_account', e.target.value)}
               />
-            </Grid>
-            <Grid item xs={12}>
               <TextField
                 fullWidth
                 label="银行账号"
                 value={formData.bank_account || ''}
                 onChange={(e) => handleFormChange('bank_account', e.target.value)}
               />
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>取消</Button>
           <Button 
             onClick={saveFamilyMember} 
             variant="contained"
-            disabled={!formData.name || !formData.relationship_type || !formData.id_number || loading}
+            disabled={!formData.name || !formData.relationship || !formData.id_number || loading}
           >
             {loading ? '保存中...' : '保存'}
           </Button>

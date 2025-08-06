@@ -13,17 +13,17 @@ from ..services.file_service import FileService
 from ..services.ai_service import AIService
 from ..services.excel_service import ExcelService
 
-router = APIRouter(prefix="/upload", tags=["文件上传"])
+router = APIRouter(tags=["文件上传"], include_in_schema=True)
 
 # 依赖注入
 file_service = FileService()
 ai_service = AIService()
 excel_service = ExcelService()
 
-@router.post("/", response_model=UploadResponse, summary="上传文件并处理")
+@router.post("/upload", response_model=UploadResponse, summary="上传文件并处理")
 async def upload_file(
     file: UploadFile = File(..., description="上传的文件（图片或PDF）"),
-    related_person_info: str = Form(..., description="相关人员信息JSON字符串"),
+    relatedPersonInfo: str = Form(..., description="相关人员信息JSON字符串"),
     upload_path: str = Depends(get_upload_path),
     logger = Depends(get_logger)
 ):
@@ -40,7 +40,7 @@ async def upload_file(
     try:
         # 解析相关人员信息
         try:
-            person_data = json.loads(related_person_info)
+            person_data = json.loads(relatedPersonInfo)
             person_info = RelatedPersonInfo(**person_data)
         except (json.JSONDecodeError, ValueError) as e:
             logger.error(f"解析相关人员信息失败: {e}")
@@ -81,10 +81,24 @@ async def upload_file(
         
         # 生成Excel文件
         excel_filename = f"processed_{upload_id}.xlsx"
-        excel_path = await excel_service.generate_excel(
-            person_info=person_info,
-            ai_result=ai_result,
-            filename=excel_filename
+        
+        # 准备Excel数据
+        excel_data = [
+            {
+                "姓名": person_info.name,
+                "关系": person_info.relationship,
+                "身份证号": person_info.id_number,
+                "电话": person_info.phone,
+                "处理时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "文件名": file.filename,
+                "AI识别结果": str(ai_result) if ai_result else "无"
+            }
+        ]
+        
+        excel_path = await excel_service.save_excel_data(
+            data=excel_data,
+            filename=excel_filename,
+            sheet_name="人员信息"
         )
         
         logger.info(f"Excel文件已生成: {excel_path}")

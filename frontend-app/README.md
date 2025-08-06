@@ -123,7 +123,7 @@ npm run preview
 
 ```env
 # API配置
-VITE_API_BASE_URL=http://localhost:8000/api/v1
+VITE_API_BASE_URL=http://localhost:8001/api/v1
 VITE_API_TIMEOUT=30000
 
 # 应用配置
