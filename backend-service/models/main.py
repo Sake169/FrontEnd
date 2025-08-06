@@ -9,5 +9,5 @@ processor = IntegratedDocumentProcessor(
     output_dir="./output",
     template_path="/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/template.xlsx"
 )
-result = processor.process_document_from_file("/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/test/投资任职情况查询报告.pdf",
-                        model_type='vlm-transformers')
+result = processor.process_document_from_file("/Users/jackliu/AI_Services/ai_manage/AiInvestmentFilingPlatform/test/8C45C5F5-DD5C-4708-A274-5F917EE8383F_4_5005_c.jpeg",
+                        model_type='pipeline')
