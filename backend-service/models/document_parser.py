@@ -123,7 +123,9 @@ def check_extraction_quality(extracted_data: dict) -> bool:
             for record in file_data.get('records', []):
                 total_records += 1
                 data = record.get('data', {})
-                
+                # 零申报 改为 False
+                if data.get('零申报', '').strip() == 'True':
+                    data['零申报'] = False
                 # 检查必需的三个字段
                 # 1. 产品代码或产品名称或企业名称
                 product_code = data.get('产品代码', '').strip()
